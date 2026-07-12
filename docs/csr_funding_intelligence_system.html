@@ -1,0 +1,443 @@
+
+<style>
+  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-sans)}
+  .root{padding:1.5rem 0;max-width:680px}
+  .nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.5rem}
+  .nav-btn{font-size:12px;padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:20px;background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+  .nav-btn.active{background:var(--color-background-tertiary);color:var(--color-text-primary);border-color:var(--color-border-primary);font-weight:500}
+  .section{display:none}
+  .section.active{display:block}
+  .card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:1rem}
+  .card-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:0.5rem}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:500}
+  .b-blue{background:var(--color-background-info);color:var(--color-text-info)}
+  .b-green{background:var(--color-background-success);color:var(--color-text-success)}
+  .b-warn{background:var(--color-background-warning);color:var(--color-text-warning)}
+  .b-danger{background:var(--color-background-danger);color:var(--color-text-danger)}
+  .b-gray{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.75rem 1rem}
+  .metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+  .metric-val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+  .metric-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+  .field-row{display:grid;grid-template-columns:160px 1fr;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px}
+  .field-row:last-child{border-bottom:none}
+  .field-label{color:var(--color-text-secondary)}
+  .field-val{color:var(--color-text-primary)}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:8px;background:var(--color-background-secondary);color:var(--color-text-secondary);margin:1px}
+  .drift-bar-wrap{margin:8px 0}
+  .drift-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:3px;display:flex;justify-content:space-between}
+  .drift-track{height:6px;background:var(--color-border-tertiary);border-radius:3px;overflow:hidden}
+  .drift-fill{height:100%;border-radius:3px;transition:width .6s}
+  .drift-red{background:#E24B4A}
+  .drift-amber{background:#EF9F27}
+  .drift-green{background:#639922}
+  .drift-blue{background:#378ADD}
+  .schema-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  .schema-table th{text-align:left;padding:5px 8px;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-secondary);font-weight:500}
+  .schema-table td{padding:5px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:top}
+  .schema-table tr:last-child td{border-bottom:none}
+  .entity-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 10px;border-radius:12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);margin:2px}
+  .entity-chip i{font-size:13px}
+  .rel-line{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 0;color:var(--color-text-secondary);border-bottom:0.5px solid var(--color-border-tertiary)}
+  .rel-line:last-child{border-bottom:none}
+  .rel-entity{font-weight:500;color:var(--color-text-primary);font-size:12px}
+  .rel-arrow{color:var(--color-text-tertiary);font-size:13px}
+  .novel-accent{border-left:3px solid #E24B4A;padding-left:12px;margin:10px 0}
+  .step-row{display:flex;gap:10px;margin-bottom:8px;font-size:13px}
+  .step-num{width:22px;height:22px;border-radius:50%;background:var(--color-background-secondary);color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:1px}
+  .step-content{flex:1;color:var(--color-text-primary)}
+  .step-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+  .alert{border-radius:var(--border-radius-md);padding:10px 14px;font-size:13px;margin-bottom:10px}
+  .alert-info{background:var(--color-background-info);color:var(--color-text-info)}
+  .alert-warn{background:var(--color-background-warning);color:var(--color-text-warning)}
+  .score-ring{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .score-ring svg{overflow:visible}
+  .match-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px}
+  .match-row:last-child{border-bottom:none}
+  .match-score{font-size:16px;font-weight:500;min-width:36px}
+  .version-row{display:flex;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px}
+  .version-row:last-child{border-bottom:none}
+  .version-date{color:var(--color-text-tertiary);min-width:80px}
+  .version-change{color:var(--color-text-primary)}
+  .version-type{min-width:80px}
+  .expand-btn{font-size:12px;color:var(--color-text-info);cursor:pointer;border:none;background:none;padding:4px 0;text-decoration:underline}
+  .hidden{display:none}
+  .conf-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+  .conf-high{background:#639922}
+  .conf-med{background:#EF9F27}
+  .conf-low{background:#E24B4A}
+  .section-header{font-size:13px;font-weight:500;color:var(--color-text-secondary);letter-spacing:.04em;margin:1.25rem 0 0.75rem;text-transform:uppercase;font-size:11px}
+</style>
+
+<div class="root">
+  <h2 class="sr-only">CSR funding intelligence system: schema, drift engine, matching, and novel concept explorer</h2>
+
+  <div class="nav" id="nav">
+    <button class="nav-btn active" onclick="show('overview')">Overview</button>
+    <button class="nav-btn" onclick="show('schema')">Entity schema</button>
+    <button class="nav-btn" onclick="show('sample')">Sample records</button>
+    <button class="nav-btn" onclick="show('drift')">Drift engine ★</button>
+    <button class="nav-btn" onclick="show('matching')">Matching model</button>
+    <button class="nav-btn" onclick="show('mvp')">MVP roadmap</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="section active" id="sec-overview">
+    <div class="grid3" style="margin-bottom:1rem">
+      <div class="metric"><div class="metric-label">Core entities</div><div class="metric-val">10</div><div class="metric-sub">Connected, versioned</div></div>
+      <div class="metric"><div class="metric-label">Drift dimensions</div><div class="metric-val">4</div><div class="metric-sub">Requirement · Sector · Geo · Openness</div></div>
+      <div class="metric"><div class="metric-label">Match signals</div><div class="metric-val">17</div><div class="metric-sub">Weighted scoring model</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">System architecture layers</div>
+      <div style="margin-top:8px">
+        <div class="step-row"><div class="step-num">1</div><div class="step-content"><strong style="font-weight:500">Ingestion layer</strong><div class="step-sub">Official sources → CSR portal, NGO Darpan, BRSR filings, annual reports, myScheme, funder portals, FCRA data</div></div></div>
+        <div class="step-row"><div class="step-num">2</div><div class="step-content"><strong style="font-weight:500">Entity resolution layer</strong><div class="step-sub">Deduplication, canonical IDs, relationship graph construction across companies / programs / NGOs</div></div></div>
+        <div class="step-row"><div class="step-num">3</div><div class="step-content"><strong style="font-weight:500">Intelligence layer</strong><div class="step-sub">Drift detection engine, eligibility inference, sector taxonomy, geography normalisation</div></div></div>
+        <div class="step-row"><div class="step-num">4</div><div class="step-content"><strong style="font-weight:500">Matching & scoring layer</strong><div class="step-sub">Funder–program–organisation triple scoring with explainability</div></div></div>
+        <div class="step-row"><div class="step-num">5</div><div class="step-content"><strong style="font-weight:500">Change-tracking layer</strong><div class="step-sub">Field-level versioning, drift scores, alert generation, historical snapshot storage</div></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Ecosystem gaps this system closes</div>
+      <div style="font-size:13px;color:var(--color-text-secondary);margin-top:6px;line-height:1.7">
+        <div style="padding:4px 0;border-bottom:0.5px solid var(--color-border-tertiary)">❌ Existing platforms are static directories — no temporal awareness of requirement changes</div>
+        <div style="padding:4px 0;border-bottom:0.5px solid var(--color-border-tertiary)">❌ No scoring for organizational eligibility against specific programs at a point in time</div>
+        <div style="padding:4px 0;border-bottom:0.5px solid var(--color-border-tertiary)">❌ International and Indian funder data siloed — no cross-ecosystem matching</div>
+        <div style="padding:4px 0;border-bottom:0.5px solid var(--color-border-tertiary)">❌ No detection of when a funder is opening up to new sectors or geographies</div>
+        <div style="padding:4px 0">❌ No versioned eligibility history to understand how to re-approach a declined funder</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Data source confidence hierarchy</div>
+      <div class="field-row"><div class="field-label"><span class="conf-dot conf-high"></span>High confidence</div><div class="field-val">MCA filings, BRSR, CSR portal Schedule VII, NGO Darpan, Ministry notifications</div></div>
+      <div class="field-row"><div class="field-label"><span class="conf-dot conf-med"></span>Medium confidence</div><div class="field-val">Foundation websites, annual reports, CSR committee reports, funder portals</div></div>
+      <div class="field-row"><div class="field-label"><span class="conf-dot conf-low"></span>Low confidence</div><div class="field-val">News articles, ecosystem aggregators, secondary research, inferred from grant receipts</div></div>
+    </div>
+  </div>
+
+  <!-- SCHEMA -->
+  <div class="section" id="sec-schema">
+    <div class="section-header">Core entities</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem">
+      <span class="entity-chip"><i class="ti ti-building" aria-hidden="true"></i> Company</span>
+      <span class="entity-chip"><i class="ti ti-certificate" aria-hidden="true"></i> Institution</span>
+      <span class="entity-chip"><i class="ti ti-users" aria-hidden="true"></i> NGO / Org</span>
+      <span class="entity-chip"><i class="ti ti-file-text" aria-hidden="true"></i> Program / Scheme</span>
+      <span class="entity-chip"><i class="ti ti-checklist" aria-hidden="true"></i> Requirement</span>
+      <span class="entity-chip"><i class="ti ti-map-pin" aria-hidden="true"></i> Geography</span>
+      <span class="entity-chip"><i class="ti ti-tag" aria-hidden="true"></i> Sector / Theme</span>
+      <span class="entity-chip"><i class="ti ti-heart" aria-hidden="true"></i> Beneficiary type</span>
+      <span class="entity-chip"><i class="ti ti-link" aria-hidden="true"></i> Source reference</span>
+      <span class="entity-chip"><i class="ti ti-history" aria-hidden="true"></i> Change history</span>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Company / Funder entity schema</div>
+      <table class="schema-table">
+        <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>company_id</td><td><span class="badge b-gray">UUID</span></td><td>Canonical identifier</td></tr>
+          <tr><td>name</td><td><span class="badge b-gray">text</span></td><td>Legal + common names</td></tr>
+          <tr><td>category</td><td><span class="badge b-gray">enum</span></td><td>PSU · Private · MNC · Foundation · Bank</td></tr>
+          <tr><td>cin / pan</td><td><span class="badge b-gray">text</span></td><td>MCA linkage for BRSR cross-reference</td></tr>
+          <tr><td>csr_obligation_cr</td><td><span class="badge b-gray">decimal[]</span></td><td>Year-wise 2% obligation in ₹ Cr</td></tr>
+          <tr><td>csr_spend_actual_cr</td><td><span class="badge b-gray">decimal[]</span></td><td>Actual spend per FY</td></tr>
+          <tr><td>sector_focus</td><td><span class="badge b-gray">sector_id[]</span></td><td>FK → Sector entity, versioned</td></tr>
+          <tr><td>geography_focus</td><td><span class="badge b-gray">geo_id[]</span></td><td>FK → Geography entity, versioned</td></tr>
+          <tr><td>implementing_mode</td><td><span class="badge b-gray">enum</span></td><td>Direct · Foundation · Section 8 · Trust</td></tr>
+          <tr><td>accepts_proposals</td><td><span class="badge b-gray">bool</span></td><td>Unsolicited proposal status</td></tr>
+          <tr><td>required_registrations</td><td><span class="badge b-gray">req_id[]</span></td><td>FK → Requirement entity</td></tr>
+          <tr><td>min_track_record_yrs</td><td><span class="badge b-gray">int</span></td><td>Minimum years of NGO operation</td></tr>
+          <tr><td>contact / portal_url</td><td><span class="badge b-gray">text</span></td><td>Application entry point</td></tr>
+          <tr><td>source_confidence</td><td><span class="badge b-gray">enum</span></td><td>high · medium · low</td></tr>
+          <tr><td>last_verified</td><td><span class="badge b-gray">timestamp</span></td><td>When data was last checked</td></tr>
+          <tr><td>drift_scores</td><td><span class="badge b-gray">JSONB</span></td><td>Requirement/Sector/Geo/Openness drift — see Drift engine</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Program / Scheme entity schema</div>
+      <table class="schema-table">
+        <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>program_id</td><td><span class="badge b-gray">UUID</span></td><td></td></tr>
+          <tr><td>parent_funder_id</td><td><span class="badge b-gray">UUID</span></td><td>FK → Company or Institution</td></tr>
+          <tr><td>program_type</td><td><span class="badge b-gray">enum</span></td><td>CSR · Govt scheme · Grant · Research funding · Aid</td></tr>
+          <tr><td>status</td><td><span class="badge b-gray">enum</span></td><td>Active · Closed · Suspended · Recurring · Expected reopen</td></tr>
+          <tr><td>grant_band_min / max</td><td><span class="badge b-gray">decimal</span></td><td>Typical grant range in ₹ or USD</td></tr>
+          <tr><td>application_cycle</td><td><span class="badge b-gray">enum</span></td><td>Rolling · Annual · One-time · RFP-based</td></tr>
+          <tr><td>eligibility_rules</td><td><span class="badge b-gray">req_id[]</span></td><td>FK → Requirement entity with AND/OR logic</td></tr>
+          <tr><td>sector_tags</td><td><span class="badge b-gray">sector_id[]</span></td><td>FK → Sector taxonomy</td></tr>
+          <tr><td>beneficiary_types</td><td><span class="badge b-gray">ben_id[]</span></td><td>FK → Beneficiary entity</td></tr>
+          <tr><td>geography_scope</td><td><span class="badge b-gray">geo_id[]</span></td><td>States, districts, pan-India flag</td></tr>
+          <tr><td>reporting_requirements</td><td><span class="badge b-gray">text[]</span></td><td>Utilisation cert · Impact report · Audit</td></tr>
+          <tr><td>source_url</td><td><span class="badge b-gray">text</span></td><td>Canonical source</td></tr>
+          <tr><td>version_history_id</td><td><span class="badge b-gray">UUID[]</span></td><td>FK → Change history chain</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Key relationships</div>
+      <div class="rel-line"><span class="rel-entity">Company</span><span class="rel-arrow">→ has many →</span><span class="rel-entity">Programs</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">one-to-many</span></div>
+      <div class="rel-line"><span class="rel-entity">Program</span><span class="rel-arrow">→ requires →</span><span class="rel-entity">Requirements (AND/OR)</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">many-to-many</span></div>
+      <div class="rel-line"><span class="rel-entity">Program</span><span class="rel-arrow">→ targets →</span><span class="rel-entity">Sectors + Geographies</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">many-to-many</span></div>
+      <div class="rel-line"><span class="rel-entity">NGO</span><span class="rel-arrow">→ holds →</span><span class="rel-entity">Requirements (registrations)</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">many-to-many</span></div>
+      <div class="rel-line"><span class="rel-entity">NGO</span><span class="rel-arrow">→ eligible for →</span><span class="rel-entity">Programs (computed)</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">derived</span></div>
+      <div class="rel-line"><span class="rel-entity">Any entity</span><span class="rel-arrow">→ versioned via →</span><span class="rel-entity">Change history</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">temporal</span></div>
+      <div class="rel-line"><span class="rel-entity">Company / Program</span><span class="rel-arrow">→ scored by →</span><span class="rel-entity">Drift engine</span><span style="flex:1;text-align:right;font-size:11px;color:var(--color-text-tertiary)">derived, time-series</span></div>
+    </div>
+  </div>
+
+  <!-- SAMPLE RECORDS -->
+  <div class="section" id="sec-sample">
+    <div class="alert alert-info" style="font-size:12px;margin-bottom:12px"><i class="ti ti-info-circle" aria-hidden="true"></i> Sample records are illustrative of schema structure. All figures should be verified against official CSR disclosures and company filings.</div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-background-info);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--color-text-info)">TG</div>
+        <div><div style="font-size:14px;font-weight:500">Tata group (consolidated)</div><div style="font-size:12px;color:var(--color-text-secondary)">Private · Multi-entity CSR umbrella</div></div>
+        <span class="badge b-green" style="margin-left:auto">Active</span>
+      </div>
+      <div class="field-row"><div class="field-label">CSR vehicle</div><div class="field-val">Tata Trusts + individual company CSR committees</div></div>
+      <div class="field-row"><div class="field-label">Sector focus</div><div class="field-val"><span class="tag">Education</span><span class="tag">Health</span><span class="tag">Livelihoods</span><span class="tag">Water & sanitation</span><span class="tag">Nutrition</span></div></div>
+      <div class="field-row"><div class="field-label">Geography</div><div class="field-val"><span class="tag">Pan-India</span><span class="tag">Jharkhand</span><span class="tag">Odisha</span><span class="tag">Maharashtra</span></div></div>
+      <div class="field-row"><div class="field-label">Required registrations</div><div class="field-val"><span class="tag">12A</span><span class="tag">80G</span><span class="tag">CSR-1</span><span class="tag">Audited accounts</span></div></div>
+      <div class="field-row"><div class="field-label">Accepts proposals</div><div class="field-val"><span class="badge b-warn">Selective — primarily invitation</span></div></div>
+      <div class="field-row"><div class="field-label">Source confidence</div><div class="field-val"><span class="conf-dot conf-high"></span>High — Annual reports + CSR portal disclosures</div></div>
+      <button class="expand-btn" onclick="toggleExtra('tata-extra')">Show version history</button>
+      <div class="hidden" id="tata-extra" style="margin-top:8px">
+        <div class="version-row"><span class="version-date">FY 2023-24</span><span class="version-type"><span class="badge b-blue">Sector drift</span></span><span class="version-change">Added digital literacy to priority list; reduced standalone infrastructure weight</span></div>
+        <div class="version-row"><span class="version-date">FY 2022-23</span><span class="version-type"><span class="badge b-warn">Geo drift</span></span><span class="version-change">Expanded Odisha district focus from 3 to 7 districts</span></div>
+        <div class="version-row"><span class="version-date">FY 2021-22</span><span class="version-type"><span class="badge b-gray">Requirement</span></span><span class="version-change">CSR-1 registration made mandatory for implementing NGOs (regulatory change)</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-background-success);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--color-text-success)">RF</div>
+        <div><div style="font-size:14px;font-weight:500">Reliance Foundation</div><div style="font-size:12px;color:var(--color-text-secondary)">Foundation · Section 8</div></div>
+        <span class="badge b-green" style="margin-left:auto">Active</span>
+      </div>
+      <div class="field-row"><div class="field-label">Sector focus</div><div class="field-val"><span class="tag">Rural transformation</span><span class="tag">Education</span><span class="tag">Health</span><span class="tag">Sports</span><span class="tag">Disaster response</span></div></div>
+      <div class="field-row"><div class="field-label">Geography</div><div class="field-val"><span class="tag">Pan-India</span><span class="tag">Gujarat</span><span class="tag">Maharashtra</span></div></div>
+      <div class="field-row"><div class="field-label">Grant band</div><div class="field-val">Project-based; large multi-crore programs common</div></div>
+      <div class="field-row"><div class="field-label">Implementing mode</div><div class="field-val">Primarily direct + Foundation-led; limited third-party NGO grants</div></div>
+      <div class="field-row"><div class="field-label">Source confidence</div><div class="field-val"><span class="conf-dot conf-med"></span>Medium — Foundation website + RIL annual report</div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-background-warning);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--color-text-warning)">IxF</div>
+        <div><div style="font-size:14px;font-weight:500">Infosys Foundation</div><div style="font-size:12px;color:var(--color-text-secondary)">Foundation · Section 8</div></div>
+        <span class="badge b-green" style="margin-left:auto">Active</span>
+      </div>
+      <div class="field-row"><div class="field-label">Sector focus</div><div class="field-val"><span class="tag">Education</span><span class="tag">Healthcare</span><span class="tag">Rural development</span><span class="tag">Arts & culture</span></div></div>
+      <div class="field-row"><div class="field-label">Geography</div><div class="field-val"><span class="tag">Karnataka</span><span class="tag">Andhra Pradesh</span><span class="tag">Telangana</span><span class="tag">Expanding nationally</span></div></div>
+      <div class="field-row"><div class="field-label">Accepts proposals</div><div class="field-val"><span class="badge b-danger">Does not accept unsolicited proposals</span></div></div>
+      <div class="field-row"><div class="field-label">Source confidence</div><div class="field-val"><span class="conf-dot conf-high"></span>High — Foundation website explicitly states policy</div></div>
+    </div>
+  </div>
+
+  <!-- DRIFT ENGINE -->
+  <div class="section" id="sec-drift">
+    <div class="novel-accent">
+      <div style="font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px">★ Novel feature: Funder Drift Intelligence Engine (FDIE)</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">Detects, scores, and explains how funding entities change their priorities, requirements, geographies, and openness to partnership over time — making the intelligence system dynamic rather than static.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">The core problem FDIE solves</div>
+      <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.7;margin-top:6px">
+        Funders are not static actors. A company that funded women's skilling in Rajasthan in FY 2021 may now fund climate adaptation in Uttarakhand. An NGO that got rejected two years ago on CSR-1 grounds may now be eligible. A funder that only funded direct implementation is quietly opening to intermediary grants. None of this is visible in any existing database. FDIE makes these movements legible and actionable.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Live drift scores — Mahindra & Mahindra (illustrative)</div>
+      <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">Scores computed over 5-year rolling window vs. prior 2-year baseline. Higher = more drift detected.</div>
+
+      <div class="drift-bar-wrap">
+        <div class="drift-label"><span>Sector drift</span><span style="color:#E24B4A;font-weight:500">72 / 100</span></div>
+        <div class="drift-track"><div class="drift-fill drift-red" style="width:72%"></div></div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:3px">Environment & sustainability rising sharply (+38%); women empowerment stable; education declining (-21%)</div>
+      </div>
+
+      <div class="drift-bar-wrap">
+        <div class="drift-label"><span>Geography drift</span><span style="color:#EF9F27;font-weight:500">44 / 100</span></div>
+        <div class="drift-track"><div class="drift-fill drift-amber" style="width:44%"></div></div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:3px">New state entries: Ladakh, Himachal Pradesh; reduced Telangana exposure</div>
+      </div>
+
+      <div class="drift-bar-wrap">
+        <div class="drift-label"><span>Requirement drift</span><span style="color:#639922;font-weight:500">28 / 100</span></div>
+        <div class="drift-track"><div class="drift-fill drift-green" style="width:28%"></div></div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:3px">Stable core requirements; minor: impact measurement now explicitly required in ToR</div>
+      </div>
+
+      <div class="drift-bar-wrap">
+        <div class="drift-label"><span>Openness-to-partnership drift</span><span style="color:#378ADD;font-weight:500">61 / 100</span></div>
+        <div class="drift-track"><div class="drift-fill drift-blue" style="width:61%"></div></div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:3px">Shifted from direct implementation toward implementing-NGO model in last 2 FYs</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">FDIE technical design</div>
+      <table class="schema-table">
+        <thead><tr><th>Drift dimension</th><th>Signal source</th><th>Detection method</th></tr></thead>
+        <tbody>
+          <tr><td>Sector drift</td><td>BRSR Schedule VII allocations, Annual report CSR chapter, program descriptions</td><td>Year-wise sector allocation vector → cosine distance between baseline window and current window</td></tr>
+          <tr><td>Geography drift</td><td>CSR portal state/district tags, program descriptions, implementing agency locations</td><td>Geo coverage set diff over time; weighted by spend proportion</td></tr>
+          <tr><td>Requirement drift</td><td>ToR documents, eligibility criteria, rejection/acceptance pattern data</td><td>NLP diff on requirement text fields; registration list set diff; threshold/band changes</td></tr>
+          <tr><td>Openness drift</td><td>Implementing mode field, NGO partner roster, accepting-proposals flag, ToR language</td><td>Time-series of implementing-mode + proposal-acceptance changes; semantic tone analysis of ToR</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Drift score formula (simplified)</div>
+      <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.8;margin-top:6px">
+        <div style="font-family:var(--font-mono);background:var(--color-background-secondary);padding:8px;border-radius:6px;font-size:11px;line-height:1.7">
+          SECTOR_DRIFT = 1 − cosine_similarity(sector_vector_t, sector_vector_t−n)<br>
+          GEO_DRIFT = |current_geo_set Δ baseline_geo_set| / |union|<br>
+          REQ_DRIFT = (added_reqs × 1.2 + dropped_reqs × 0.8 + modified_reqs × 0.5) / total_reqs<br>
+          OPEN_DRIFT = logit_change(P(accepts_proposals)) + mode_change_flag<br><br>
+          COMPOSITE_DRIFT = 0.35·SECTOR + 0.25·GEO + 0.25·REQ + 0.15·OPEN
+        </div>
+        <div style="margin-top:8px">Weights are configurable per user profile (e.g. an NGO seeking new funders may weight OPEN_DRIFT higher).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">FDIE alerts — what gets triggered</div>
+      <div class="step-row" style="margin-top:8px"><div class="step-num" style="background:var(--color-background-danger);color:var(--color-text-danger)"><i class="ti ti-bell" aria-hidden="true" style="font-size:11px"></i></div><div class="step-content"><strong style="font-weight:500">Openness window alert</strong><div class="step-sub">Funder shifts from closed to open — notify matching NGOs before cycle opens</div></div></div>
+      <div class="step-row"><div class="step-num" style="background:var(--color-background-warning);color:var(--color-text-warning)"><i class="ti ti-bell" aria-hidden="true" style="font-size:11px"></i></div><div class="step-content"><strong style="font-weight:500">Sector realignment alert</strong><div class="step-sub">Funder drops a sector from priority → NGOs in that sector can anticipate reduced funding</div></div></div>
+      <div class="step-row"><div class="step-num" style="background:var(--color-background-info);color:var(--color-text-info)"><i class="ti ti-bell" aria-hidden="true" style="font-size:11px"></i></div><div class="step-content"><strong style="font-weight:500">Requirement relaxation alert</strong><div class="step-sub">Funder drops a registration requirement → previously ineligible NGOs may now qualify</div></div></div>
+      <div class="step-row"><div class="step-num"><i class="ti ti-bell" aria-hidden="true" style="font-size:11px"></i></div><div class="step-content"><strong style="font-weight:500">Geography expansion alert</strong><div class="step-sub">Funder adds new state/district → local NGOs in that region get priority notification</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Why this is hard to copy</div>
+      <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.7;margin-top:6px">
+        FDIE requires <em>longitudinal, field-level data collection</em> from the moment of database inception — you cannot reconstruct drift history retroactively unless you archive snapshots. Any competitor entering later starts with a 2–3 year handicap. The proprietary moat compounds over time: the longer the system runs, the richer the drift signal, the better the alerts, the more defensible the intelligence.
+      </div>
+    </div>
+  </div>
+
+  <!-- MATCHING -->
+  <div class="section" id="sec-matching">
+    <div class="card">
+      <div class="card-title">Matching model: funder × program × organisation triple score</div>
+      <div style="font-size:12px;color:var(--color-text-secondary);margin-top:4px">17 weighted signals across 4 dimensions. Score = 0–100.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Eligibility dimension (hard gates)</div>
+      <table class="schema-table">
+        <thead><tr><th>Signal</th><th>Weight</th><th>Type</th></tr></thead>
+        <tbody>
+          <tr><td>Registration match (12A / 80G / FCRA / CSR-1)</td><td>25</td><td><span class="badge b-danger">Hard gate</span></td></tr>
+          <tr><td>Track record years ≥ minimum</td><td>15</td><td><span class="badge b-danger">Hard gate</span></td></tr>
+          <tr><td>Geography overlap (NGO operational vs. funder focus)</td><td>12</td><td><span class="badge b-warn">Weighted</span></td></tr>
+          <tr><td>Sector alignment</td><td>14</td><td><span class="badge b-warn">Weighted</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Alignment dimension (scored)</div>
+      <table class="schema-table">
+        <thead><tr><th>Signal</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Beneficiary type match</td><td>8</td></tr>
+          <tr><td>Program size fit (grant band vs. NGO budget)</td><td>6</td></tr>
+          <tr><td>Implementation capacity (past program scale)</td><td>6</td></tr>
+          <tr><td>Funder's stated preferred partner type</td><td>5</td></tr>
+          <tr><td>Language/reporting capability</td><td>3</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Timing dimension (dynamic)</div>
+      <table class="schema-table">
+        <thead><tr><th>Signal</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Program currently open (or open cycle expected)</td><td>8</td></tr>
+          <tr><td>Funder openness drift trending positive</td><td>5</td></tr>
+          <tr><td>Sector drift alignment (funder growing into NGO's sector)</td><td>4</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Sample match results for illustrative NGO: "Aakaar Foundation"</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:8px">Registered in Rajasthan · Education + women empowerment · 12A, 80G, FCRA · 8 years operating</div>
+      <div class="match-row"><span class="match-score" style="color:#639922">87</span><span style="flex:1"><div style="font-weight:500;font-size:13px">Mahindra CSR — Skilling & Education</div><div style="font-size:11px;color:var(--color-text-secondary)">Geo: Rajasthan ✓ · Sector: Education ✓ · Regs: all match · Drift: education trending down, flag</div></span><span class="badge b-green">Apply</span></div>
+      <div class="match-row"><span class="match-score" style="color:#639922">81</span><span style="flex:1"><div style="font-weight:500;font-size:13px">HUL Prabhat — Women Empowerment</div><div style="font-size:11px;color:var(--color-text-secondary)">Sector: Women empowerment ✓ · Geo: partial ✓ · Drift: stable · Openness: improving</div></span><span class="badge b-green">Apply</span></div>
+      <div class="match-row"><span class="match-score" style="color:#EF9F27">63</span><span style="flex:1"><div style="font-weight:500;font-size:13px">Tata Trusts — Education grants</div><div style="font-size:11px;color:var(--color-text-secondary)">Regs: all match · Sector: ✓ · Proposals: invitation-only ⚠ · Track record: borderline</div></span><span class="badge b-warn">Watch</span></div>
+      <div class="match-row"><span class="match-score" style="color:#E24B4A">31</span><span style="flex:1"><div style="font-weight:500;font-size:13px">Infosys Foundation — Education</div><div style="font-size:11px;color:var(--color-text-secondary)">Sector: ✓ · Geo mismatch: Karnataka focus · Does not accept proposals · Hard block</div></span><span class="badge b-danger">Not eligible</span></div>
+    </div>
+  </div>
+
+  <!-- MVP ROADMAP -->
+  <div class="section" id="sec-mvp">
+    <div class="card">
+      <div class="card-title">Phase 1 — Foundation (months 1–3)</div>
+      <div class="step-row" style="margin-top:8px"><div class="step-num">1</div><div class="step-content">Ingest top 100 CSR-obligated companies from MCA portal + CSR national portal<div class="step-sub">Priority: Tata, Reliance, Infosys, Mahindra, HUL, HDFC, SBI, L&T, Wipro, ONGC + 90 more</div></div></div>
+      <div class="step-row"><div class="step-num">2</div><div class="step-content">Build entity schema + PostgreSQL relational store with JSONB for flexible fields<div class="step-sub">Entities: Company, Program, Requirement, Sector, Geography, Beneficiary</div></div></div>
+      <div class="step-row"><div class="step-num">3</div><div class="step-content">Manual data entry for 100 companies with source URLs and confidence flags<div class="step-sub">Target: ≥ 80% field completeness for each top-50 company</div></div></div>
+      <div class="step-row"><div class="step-num">4</div><div class="step-content">Build search and filter interface (sector × geo × registration type × proposal openness)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Phase 2 — Temporal layer (months 4–6)</div>
+      <div class="step-row" style="margin-top:8px"><div class="step-num">5</div><div class="step-content">Implement change-history table and field-level versioning for all entities<div class="step-sub">Begin archiving annual report snapshots; seed historical data FY 2020–24</div></div></div>
+      <div class="step-row"><div class="step-num">6</div><div class="step-content">Launch basic FDIE — sector drift and requirement drift scores for top-50 funders<div class="step-sub">Sector allocation vector from 4 years of CSR portal data</div></div></div>
+      <div class="step-row"><div class="step-num">7</div><div class="step-content">Expand to 200 companies + 50 international funders (USAID, Ford, Gates, etc.)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Phase 3 — Intelligence & matching (months 7–12)</div>
+      <div class="step-row" style="margin-top:8px"><div class="step-num">8</div><div class="step-content">Full FDIE with all 4 drift dimensions + alert engine<div class="step-sub">Alert subscriptions for NGOs and consultants</div></div></div>
+      <div class="step-row"><div class="step-num">9</div><div class="step-content">Launch funder–program–organisation matching model<div class="step-sub">NGO profile intake + eligibility resolution + ranked match output</div></div></div>
+      <div class="step-row"><div class="step-num">10</div><div class="step-content">Add government schemes (PM schemes, Ministry programs, state government CSR co-funding)</div></div>
+      <div class="step-row"><div class="step-num">11</div><div class="step-content">API layer for B2B: consultants, CSR advisory firms, NGO networks, impact investors</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Key risks & validation questions</div>
+      <div class="alert alert-warn" style="font-size:12px;margin-bottom:8px"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Data quality risk: CSR portal data is often incomplete or lagged. Must verify against BRSR and annual reports independently.</div>
+      <div class="field-row"><div class="field-label">Validation Q1</div><div class="field-val" style="font-size:12px">Will NGOs pay for this? What is the willingness-to-pay ceiling for a grant-intelligence subscription?</div></div>
+      <div class="field-row"><div class="field-label">Validation Q2</div><div class="field-val" style="font-size:12px">Can drift detection be validated against known funder behavior changes (e.g. post-COVID sector shifts)?</div></div>
+      <div class="field-row"><div class="field-label">Validation Q3</div><div class="field-val" style="font-size:12px">Is the matching model accurate enough to trust? Need ground-truth data from successful grant applications.</div></div>
+      <div class="field-row"><div class="field-label">Validation Q4</div><div class="field-val" style="font-size:12px">What is the update cadence required for the data to stay actionably fresh — monthly? quarterly?</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  event.target.classList.add('active');
+}
+function toggleExtra(id){
+  const el=document.getElementById(id);
+  el.classList.toggle('hidden');
+  event.target.textContent=el.classList.contains('hidden')?'Show version history':'Hide version history';
+}
+</script>

@@ -1,0 +1,49 @@
+{
+  "name": "csr-funding-intelligence",
+  "version": "1.0.0",
+  "description": "Agent-based CSR funding intelligence pipeline with drift detection and matching",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "seed": "tsx scripts/seed-priority-list.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed": "tsx scripts/seed-priority-list.ts",
+    "seed:innovators": "tsx src/tools/innovators-seed.ts",
+    "ingest:discovery": "tsx src/agents/discovery.agent.ts",
+    "ingest:enrich": "tsx src/agents/enrichment.agent.ts",
+    "ingest:verify": "tsx src/agents/verification.agent.ts",
+    "ingest:drift": "tsx src/agents/drift.agent.ts",
+    "scheduler": "tsx src/scheduler/cron.ts",
+    "discover": "tsx src/index.ts --mode=discover",
+    "enrich": "tsx src/index.ts --mode=enrich",
+    "status": "tsx src/index.ts --mode=status",
+    "migrate": "tsx scripts/migrate.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "node-cron": "^3.0.3",
+    "node-fetch": "^3.3.2",
+    "p-queue": "^9.3.0",
+    "p-retry": "^8.0.0",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.13.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

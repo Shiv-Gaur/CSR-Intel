@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSR Funding Intelligence</title>
+  <style>
+    :root {
+      --primary: #2563eb; --success: #16a34a; --warning: #d97706; --danger: #dc2626;
+      --purple: #7c3aed; --grey: #6b7280; --page: #f8f9fa; --card: #ffffff;
+      --border: #e5e7eb; --text: #111827; --text-muted: #6b7280; --track: #eef1f5;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--page); color: var(--text); }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; }
+    a { color: var(--primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    button { font-family: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 8px 14px; border-radius: 8px; transition: background .12s, border-color .12s; }
+    button:hover { background: var(--page); }
+    button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    button.primary:hover { background: #1d4ed8; }
+    button:disabled { opacity: .55; cursor: default; }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 20px; }
+
+    header.topbar { background: var(--card); border-bottom: 1px solid var(--border); }
+    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand .logo { width: 36px; height: 36px; border-radius: 9px; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+    .brand h1 { font-size: 17px; font-weight: 650; }
+    .brand p { font-size: 12px; color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .tab { padding: 10px 18px; border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--text-muted); font-weight: 600; }
+    .tab:hover { background: none; color: var(--text); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .stat .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .stat .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+    .stat .value.blue { color: var(--primary); } .stat .value.green { color: var(--success); }
+    .stat .value.amber { color: var(--warning); } .stat .value.grey { color: var(--grey); }
+
+    /* Insights */
+    .insights { background: linear-gradient(180deg,#f0f7ff, #f8fbff); border: 1px solid #cfe1fb; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; }
+    .insights .ititle { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--primary); font-weight: 700; margin-bottom: 10px; }
+    .insights .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 22px; }
+    .insights .item { font-size: 13px; } .insights .item b { font-weight: 700; }
+    .insights .item .lead { color: var(--text-muted); }
+    @media (max-width: 800px){ .insights .grid { grid-template-columns: 1fr; } }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .search { flex: 1; min-width: 240px; display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; }
+    .search input { border: none; outline: none; width: 100%; font-size: 14px; background: transparent; color: var(--text); }
+
+    /* Filter bar */
+    .filterbar { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+    .filterrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .fgrouplabel { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; margin-right: 4px; }
+    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--text-muted); font-size: 12.5px; cursor: pointer; }
+    .pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .dd { position: relative; }
+    .dd > button { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; }
+    .dd.has > button { border-color: var(--primary); color: var(--primary); }
+    .ddmenu { display: none; position: absolute; z-index: 40; top: 110%; left: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 36px rgba(0,0,0,.14); padding: 8px; width: 250px; max-height: 280px; overflow: auto; }
+    .dd.open .ddmenu { display: block; }
+    .ddmenu label { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+    .ddmenu label:hover { background: var(--page); }
+    .advtoggle { font-size: 12.5px; color: var(--primary); background: none; border: none; padding: 6px 8px; }
+    .advanced { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+    .advanced.show { display: block; }
+    .chips-active { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+    .achip { display: inline-flex; align-items: center; gap: 6px; background: rgba(37,99,235,.10); color: var(--primary); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+    .achip b { cursor: pointer; font-weight: 800; }
+    .clearall { font-size: 12px; color: var(--danger); background: none; border: none; }
+
+    .main { display: grid; grid-template-columns: 60% 40%; gap: 16px; align-items: start; }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    /* Detail panel follows the scroll beside the table; its own content scrolls
+       inside when taller than the viewport. Requires .main{align-items:start}. */
+    .panel.side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+    .panel .phead { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .panel .phead h2 { font-size: 14px; font-weight: 650; }
+    .panel .phead .count { font-size: 12px; color: var(--text-muted); }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+    thead th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    thead th.sortable:hover { color: var(--text); }
+    thead th.sorted { color: var(--primary); }
+    tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tbody tr { cursor: pointer; } tbody tr:hover { background: var(--page); } tbody tr.selected { background: #eff4ff; }
+    .cname { font-weight: 600; } .csub { font-size: 12px; color: var(--text-muted); }
+    .chk { width: 30px; text-align: center; } .chk input { accent-color: var(--primary); cursor: pointer; }
+
+    .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .badge.green { color: var(--success); background: rgba(22,163,74,.10); }
+    .badge.blue  { color: var(--primary); background: rgba(37,99,235,.10); }
+    .badge.amber { color: var(--warning); background: rgba(217,119,6,.12); }
+    .badge.grey  { color: var(--grey);    background: rgba(107,114,128,.12); }
+    .trl { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 7px; }
+    .trl.research { color: #b45309; background: rgba(217,119,6,.12); }
+    .trl.development { color: var(--primary); background: rgba(37,99,235,.12); }
+    .trl.deployment { color: var(--success); background: rgba(22,163,74,.12); }
+    .trl.unknown { color: var(--grey); background: rgba(107,114,128,.12); }
+
+    .score { min-width: 110px; } .bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+    .bar > span { display: block; height: 100%; border-radius: 999px; } .score .lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Bulk bar */
+    .bulkbar { display: none; align-items: center; gap: 10px; background: #111827; color: #fff; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+    .bulkbar.show { display: flex; }
+    .bulkbar .bn { font-weight: 700; } .bulkbar .sp { flex: 1; }
+    .bulkbar button { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.2); color: #fff; }
+    .bulkbar button:hover { background: rgba(255,255,255,.2); }
+    .bulkbar button.danger { background: rgba(220,38,38,.85); border-color: transparent; }
+
+    .detail { padding: 18px; } .detail .empty { color: var(--text-muted); text-align: center; padding: 40px 10px; }
+    .detail h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .detail .meta { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
+    .dtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+    .dtab { padding: 8px 12px; border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; color: var(--text-muted); font-weight: 600; }
+    .dtab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .scoreblock { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+    .scoreblock .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .scoreblock .num { font-size: 22px; font-weight: 700; } .scoreblock .verdict { font-size: 13px; font-weight: 600; }
+    .field { margin-bottom: 12px; } .field .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; } .field .v { font-size: 13px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; } .chip { background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+    .srcbadge { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 1px 5px; margin-left: 6px; }
+    .srcbadge.extracted { color: var(--success); background: rgba(22,163,74,.12); }
+    .srcbadge.inferred { color: var(--warning); background: rgba(217,119,6,.12); }
+    .srcbadge.estimated { color: var(--purple); background: rgba(124,58,237,.12); }
+    .actions { display: flex; gap: 10px; margin-top: 8px; }
+    .matchblock { background: #f0f7ff; border: 1px solid #cfe1fb; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+    .matchblock .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .matchblock .num { font-size: 22px; font-weight: 700; color: var(--primary); }
+    .matchblock .why { margin-top: 10px; } .matchblock .why .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
+    .matchblock .why ul { margin: 0; padding-left: 16px; } .matchblock .why li { font-size: 12.5px; margin-bottom: 2px; } .matchblock .none { font-size: 12.5px; color: var(--text-muted); }
+
+    footer { text-align: center; color: var(--text-muted); font-size: 12px; padding: 24px 0 8px; }
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 11px 18px; border-radius: 9px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 80; }
+    #toast.show { opacity: 1; }
+    .iconbtn { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; font-size: 17px; position: relative; }
+    .dot { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; display: none; align-items: center; justify-content: center; }
+    .dot.show { display: flex; }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: none; align-items: flex-start; justify-content: center; z-index: 60; padding: 40px 16px; overflow-y: auto; }
+    .modal-bg.show { display: flex; }
+    .modal { background: var(--card); border-radius: 14px; width: 100%; max-width: 640px; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,.18); }
+    .modal .mhead { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal .mhead h2 { font-size: 16px; font-weight: 650; }
+    .modal .mbody { padding: 20px; max-height: 65vh; overflow-y: auto; }
+    .modal .mfoot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+    .modal .close { border: none; background: none; font-size: 20px; color: var(--text-muted); padding: 4px 8px; }
+    .fgroup { margin-bottom: 20px; }
+    .fgroup > label.h { display: block; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; }
+    .checkgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; } .checkgrid.geo { grid-template-columns: repeat(3, 1fr); }
+    .checkgrid label { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; } .checkgrid input { accent-color: var(--primary); }
+    .taginput { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--border); border-radius: 9px; padding: 7px 8px; }
+    .taginput input { border: none; outline: none; flex: 1; min-width: 120px; font-size: 13px; background: transparent; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(37,99,235,.10); color: var(--primary); border-radius: 6px; padding: 3px 8px; font-size: 12px; } .tag b { cursor: pointer; font-weight: 700; }
+    .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+    .mbadge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--primary); background: rgba(37,99,235,.12); border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+    .mbadge.auto { color: var(--purple); background: rgba(124,58,237,.12); }
+    td.delcell { width: 44px; text-align: right; padding-left: 8px; }
+    /* Icon-only button: inline SVG (no emoji), aria-label instead of title —
+       a title attribute makes the browser draw its native dark tooltip box,
+       which floated over the TRL column. Hidden until the row is hovered;
+       lives in its own fixed-width cell so it can never overlap adjacent text. */
+    .rowdel { opacity: 0; pointer-events: none; border: none; background: transparent; color: var(--text-muted, var(--grey)); padding: 4px; margin: 0; line-height: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; position: relative; z-index: 1; transition: opacity .12s, color .12s, background .12s; }
+    .rowdel svg { width: 15px; height: 15px; display: block; }
+    tbody tr:hover .rowdel { opacity: 1; pointer-events: auto; }
+    .rowdel:hover { color: var(--danger); background: rgba(220,38,38,.08); }
+    /* Notifications panel */
+    .notif { position: fixed; top: 60px; right: 16px; width: 320px; max-width: calc(100vw - 32px); background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.2); z-index: 1000; display: none; }
+    .notif.show { display: block; }
+    .notif .nh { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .notif .nh h3 { font-size: 14px; } .notif .nlist { max-height: 380px; overflow: auto; }
+    .nitem { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .nitem:hover { background: var(--page); } .nitem .ic { font-size: 16px; } .nitem .tx { font-size: 13px; } .nitem .tx .sub { color: var(--text-muted); font-size: 11.5px; }
+    .nempty { padding: 22px 14px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .tip { border-bottom: 1px dotted var(--text-muted); cursor: help; }
+
+    @media (max-width: 900px) { .main { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } .panel.side { position: static; max-height: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="brand">
+        <div class="logo">C</div>
+        <div><h1>CSR Funding Intelligence</h1><p>Deterministic discovery, enrichment &amp; verification</p></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="addBtn">＋ Add Company</button>
+        <button id="addInnBtn" style="display:none">＋ Add Innovator</button>
+        <button id="importInnBtn" style="display:none" title="Bulk import innovators from .xlsx or .csv">⬆ Import from Excel</button>
+        <button id="tmplInnBtn" style="display:none" title="Blank Excel template with the expected columns">⬇ Download Template</button>
+        <input type="file" id="importInnFile" accept=".xlsx,.csv" style="display:none">
+        <button id="reenrichAllHdrBtn" title="Queue a fresh enrichment for every row in this tab">↻ Re-enrich All</button>
+        <button class="iconbtn" id="bellBtn" title="Notifications">🔔<span class="dot" id="bellDot">0</span></button>
+        <button class="iconbtn" id="profileBtn" title="Our Profile">⚙</button>
+        <button class="primary" id="csvBtn">⬇ Download CSV</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notifications panel -->
+  <div class="notif" id="notifPanel">
+    <div class="nh"><h3>Notifications</h3><button id="notifReadAll" style="font-size:12px">Mark all read</button></div>
+    <div class="nlist" id="notifList"></div>
+  </div>
+
+  <!-- Our Profile modal -->
+  <div class="modal-bg" id="profileModal">
+    <div class="modal">
+      <div class="mhead"><h2>⚙ Our Profile</h2><button class="close" id="profileClose">×</button></div>
+      <div class="mbody">
+        <div class="fgroup"><label class="h">Technologies we offer</label>
+          <div class="taginput" id="techInput"><input type="text" placeholder="Type and press Enter… e.g. IoT, AI/ML, Drone"></div>
+          <div class="hint">Free text — press Enter or comma to add.</div></div>
+        <div class="fgroup"><label class="h">Sectors we target</label><div class="checkgrid" id="sectorGrid"></div></div>
+        <div class="fgroup"><label class="h">Target states / UTs</label><div class="checkgrid geo" id="geoGrid"></div></div>
+        <div class="fgroup"><label class="h">Keywords</label><div class="taginput" id="kwInput"><input type="text" placeholder="Type and press Enter… e.g. solar, water, girls"></div></div>
+      </div>
+      <div class="mfoot"><button id="profileCancel">Cancel</button><button class="primary" id="profileSave">Save Profile</button></div>
+    </div>
+  </div>
+
+  <!-- Add Company modal -->
+  <div class="modal-bg" id="addModal">
+    <div class="modal" style="max-width:480px">
+      <div class="mhead"><h2>＋ Add Company</h2><button class="close" id="addClose">×</button></div>
+      <div class="mbody">
+        <div class="fgroup"><label class="h">Company name</label>
+          <div class="taginput" style="padding:0"><input id="addName" type="text" placeholder="e.g. Reliance Industries" style="padding:10px 12px"></div></div>
+        <div id="addStatus" class="hint" style="display:none"></div>
+      </div>
+      <div class="mfoot"><button id="addCancel">Cancel</button><button class="primary" id="addSave">Add &amp; Enrich</button></div>
+    </div>
+  </div>
+
+  <!-- Add Innovator modal -->
+  <div class="modal-bg" id="addInnModal">
+    <div class="modal" style="max-width:560px">
+      <div class="mhead"><h2>＋ Add Innovator</h2><button class="close" id="addInnClose">×</button></div>
+      <div class="mbody">
+        <div class="fgroup"><label class="h">Name</label>
+          <div class="taginput" style="padding:0"><input id="innName" type="text" placeholder="e.g. Chakr Innovation" style="padding:10px 12px"></div></div>
+        <div style="display:flex;gap:14px">
+          <div class="fgroup" style="flex:1"><label class="h">Type</label>
+            <select id="innType" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;background:var(--card);color:var(--text)">
+              <option value="startup">Startup</option>
+              <option value="individual">Individual Innovator</option>
+              <option value="research_institute">Research Institute</option>
+            </select></div>
+          <div class="fgroup" style="flex:1"><label class="h">Domain</label>
+            <select id="innDomain" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;background:var(--card);color:var(--text)"></select></div>
+        </div>
+        <div style="display:flex;gap:14px">
+          <div class="fgroup" style="flex:1"><label class="h">Current TRL (1–9)</label>
+            <div class="taginput" style="padding:0"><input id="innTrl" type="number" min="1" max="9" placeholder="e.g. 6" style="padding:10px 12px"></div></div>
+          <div class="fgroup" style="flex:1"><label class="h">Contact email</label>
+            <div class="taginput" style="padding:0"><input id="innEmail" type="email" placeholder="optional" style="padding:10px 12px"></div></div>
+        </div>
+        <div class="fgroup"><label class="h">Description</label>
+          <textarea id="innDesc" rows="3" placeholder="What does the technology do?" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:var(--card);color:var(--text);resize:vertical"></textarea></div>
+        <div class="fgroup"><label class="h">Geography (states)</label>
+          <div class="taginput" id="innGeo"><input type="text" placeholder="Type a state and press Enter… e.g. Delhi"></div></div>
+        <div id="innStatus" class="hint" style="display:none"></div>
+        <div class="hint">On add, deep research runs across free sources (IndiaCSR, Wikipedia, Screener) to fill founders, awards, TRL and sustainability signals.</div>
+      </div>
+      <div class="mfoot"><button id="addInnCancel">Cancel</button><button class="primary" id="addInnSave">Add &amp; Research</button></div>
+    </div>
+  </div>
+
+  <!-- Import results modal -->
+  <div class="modal-bg" id="importModal">
+    <div class="modal" style="max-width:520px">
+      <div class="mhead"><h2>⬆ Import Results</h2><button class="close" id="importClose">×</button></div>
+      <div class="mbody">
+        <p id="importSummary" style="font-weight:600;margin-bottom:12px"></p>
+        <div id="importDetails"></div>
+        <div class="hint" style="margin-top:10px">Imported innovators are deep-researched in the background — founders, awards and sustainability signals fill in over the next minutes.</div>
+      </div>
+      <div class="mfoot"><button class="primary" id="importDone">Done</button></div>
+    </div>
+  </div>
+
+  <!-- Edit Company modal -->
+  <div class="modal-bg" id="editModal">
+    <div class="modal" style="max-width:520px">
+      <div class="mhead"><h2>✏ Edit Company</h2><button class="close" id="editClose">×</button></div>
+      <div class="mbody">
+        <div class="fgroup"><label class="h">Name</label><div class="taginput" style="padding:0"><input id="editName" type="text" style="padding:10px 12px"></div></div>
+        <div class="fgroup"><label class="h">Sectors (manual override)</label><div class="taginput" id="editSectors"><input type="text" placeholder="Type and Enter…"></div></div>
+        <div class="fgroup"><label class="h">Geographies (manual override)</label><div class="taginput" id="editGeos"><input type="text" placeholder="Type and Enter…"></div></div>
+        <div style="display:flex;gap:14px">
+          <div class="fgroup" style="flex:1"><label class="h">CSR Spend (₹ Cr)</label><div class="taginput" style="padding:0"><input id="editSpend" type="number" min="0" step="0.1" placeholder="optional" style="padding:10px 12px"></div></div>
+          <div class="fgroup" style="flex:1"><label class="h">Score override (0–100)</label><div class="taginput" style="padding:0"><input id="editScore" type="number" min="0" max="100" placeholder="optional" style="padding:10px 12px"></div></div>
+        </div>
+        <div class="hint">Edited fields get a ✏ Manual badge and are never overwritten by the pipeline.</div>
+      </div>
+      <div class="mfoot"><button id="editCancel">Cancel</button><button class="primary" id="editSave">Save Changes</button></div>
+    </div>
+  </div>
+
+  <!-- Bulk delete confirm modal -->
+  <div class="modal-bg" id="bulkDelModal">
+    <div class="modal" style="max-width:480px">
+      <div class="mhead"><h2>Delete selected?</h2><button class="close" id="bulkDelClose">×</button></div>
+      <div class="mbody"><p style="margin-bottom:10px">This permanently deletes:</p><div id="bulkDelList" class="chips"></div></div>
+      <div class="mfoot"><button id="bulkDelCancel">Cancel</button><button class="primary" id="bulkDelConfirm" style="background:var(--danger);border-color:var(--danger)">Delete all</button></div>
+    </div>
+  </div>
+
+  <!-- Live enrichment progress modal (polled every 2s) -->
+  <div class="modal-bg" id="enrichModal">
+    <div class="modal" style="max-width:540px">
+      <div class="mhead"><h2 id="enrichTitle">Enriching…</h2><button class="close" id="enrichClose">×</button></div>
+      <div class="mbody">
+        <div id="enrichStage" style="font-weight:600;margin-bottom:10px">Queued — waiting for the worker…</div>
+        <div id="enrichSources"></div>
+        <div class="hint" id="enrichHint" style="margin-top:10px;color:var(--text-muted);font-size:12px">Each line is a real fetch happening right now — when this finishes, everything shown for this company came from these pages, just now.</div>
+      </div>
+      <div class="mfoot"><button id="enrichDone">Close</button></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab active" id="tabCompanies" data-tab="companies">Companies</button>
+      <button class="tab" id="tabSchemes" data-tab="schemes">Welfare Schemes</button>
+      <button class="tab" id="tabInnovators" data-tab="innovators">Innovators</button>
+    </div>
+
+    <section class="stats" id="stats">
+      <div class="stat"><div class="label" id="st-total-l">Total Companies</div><div class="value blue" id="st-total">—</div></div>
+      <div class="stat"><div class="label">Ready</div><div class="value green" id="st-ready">—</div></div>
+      <div class="stat"><div class="label">Needs Review</div><div class="value amber" id="st-review">—</div></div>
+      <div class="stat"><div class="label">Verified</div><div class="value grey" id="st-verified">—</div></div>
+    </section>
+
+    <section class="insights" id="insights">
+      <div class="ititle">✦ Insights</div>
+      <div class="grid" id="insightsGrid"></div>
+    </section>
+
+    <section class="controls">
+      <div class="search"><span aria-hidden="true">🔍</span><input id="search" type="text" placeholder="Search by name or sector…" autocomplete="off"></div>
+    </section>
+
+    <section class="filterbar" id="filterbar"></section>
+
+    <div class="bulkbar" id="bulkbar">
+      <span class="bn" id="bulkCount">0 selected</span>
+      <span class="sp"></span>
+      <button id="bulkReenrich">↻ Re-Enrich</button>
+      <button id="bulkExport">⬇ Export</button>
+      <button id="bulkReviewed">✓ Mark Reviewed</button>
+      <button class="danger" id="bulkDelete">🗑 Delete</button>
+      <button id="bulkClear">Clear</button>
+    </div>
+
+    <section class="main">
+      <div class="panel">
+        <div class="phead"><h2 id="listTitle">Companies</h2><span class="count" id="tableCount"></span></div>
+        <div id="freshBanner" style="display:none"></div>
+        <table>
+          <thead id="thead"></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="panel side">
+        <div class="phead"><h2>Details</h2></div>
+        <div class="detail" id="detail"><div class="empty">Select an item to see details.</div></div>
+      </div>
+    </section>
+
+    <footer>CSR Funding Intelligence · Local, LLM-free pipeline · Search-free mode (direct sources only)</footer>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // ─── Constants ───────────────────────────────────────────────────────────
+    var SECTORS = ['Education','Healthcare','Environment','Rural Development','Women Empowerment','Skill Development','Sanitation','Drinking Water','Sports','Arts & Culture','Technology','Poverty Alleviation','Disaster Relief','Animal Welfare','Armed Forces Veterans'];
+    var GEOS = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'];
+    var STATUS = { complete:{label:'Ready',cls:'green'}, verified:{label:'Verified',cls:'blue'}, enriched:{label:'Enriched',cls:'grey'}, human_review:{label:'Needs Review',cls:'amber'}, stub:{label:'Processing',cls:'grey'}, active:{label:'Active',cls:'green'}, inactive:{label:'Inactive',cls:'grey'} };
+    var TRASH_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+    var DOMAINS = [['solid_waste','Solid Waste'],['plastic','Plastic'],['wastewater','Wastewater'],['air_pollution','Air Pollution'],['e_waste','E-Waste'],['green_hydrogen','Green Hydrogen'],['circular_economy','Circular Economy'],['ai_medtech','AI MedTech'],['water_body','Water Body']];
+    var STAGES = [['ideation','Ideation'],['prototype','Prototype'],['pilot','Pilot'],['scale','Scale'],['deployed','Deployed']];
+    function domainLabel(d){ for(var i=0;i<DOMAINS.length;i++)if(DOMAINS[i][0]===d)return DOMAINS[i][1]; return d||'—'; }
+    function stageLabel(s){ for(var i=0;i<STAGES.length;i++)if(STAGES[i][0]===s)return STAGES[i][1]; return s||'—'; }
+    function trlNumBand(n){ if(n==null)return 'unknown'; return n<=3?'research':n<=6?'development':'deployment'; }
+    function trlNumBadge(n){ if(n==null)return '<span class="trl unknown">TRL: n/a</span>'; return '<span class="trl '+trlNumBand(n)+'">TRL '+n+'</span>'; }
+    function susBar(score){ var col=score>=70?'var(--success)':score>=40?'var(--primary)':'var(--grey)'; return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+col+'"></span></div><div class="lbl">'+score+' / 100</div></div>'; }
+    function statusInfo(s){ return STATUS[String(s||'').toLowerCase()] || {label:s||'Unknown',cls:'grey'}; }
+
+    function scoreCompany(c){ var sec=(c.sectorFocus||[]).length, geo=(c.geographyFocus||[]).length, spend=Number(c.csrSpendActualCr)>0, hasDoc=(c.sourceUrls||[]).length>0, hasContact=!!c.contactEmail; var s=0; s+=Math.min(sec,10)*2; s+=Math.min(geo,10)*2; if(spend)s+=25; if(hasDoc)s+=20; if(hasContact)s+=15; return Math.max(0,Math.min(100,Math.round(s))); }
+    function displayScore(c){ return (typeof c.manualScore==='number')?c.manualScore:scoreCompany(c); }
+    // Neutral framing: low scores are a DATA GAP, not a failure — grey, never red/orange.
+    function scoreVerdict(s){ if(s>=80)return{text:'Strong match',color:'var(--success)'}; if(s>=60)return{text:'Good match',color:'var(--primary)'}; if(s>=40)return{text:'Fair match',color:'var(--grey)'}; return{text:'Limited data',color:'var(--grey)'}; }
+    function barHtml(score){ var v=scoreVerdict(score); return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+v.color+'"></span></div><div class="lbl">'+score+' / 100 · '+v.text+'</div></div>'; }
+    function trlBadge(trl){ if(!trl||!trl.band||trl.band==='unknown')return '<span class="trl unknown">TRL: n/a</span>'; return '<span class="trl '+trl.band+'">'+esc(trl.label)+'</span>'; }
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function showToast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show');},2600); }
+
+    // ─── State ───────────────────────────────────────────────────────────────
+    var companies=[], schemes=[], innovators=[], selectedId=null, selectedKind=null, detailTab='overview';
+    var activeTab='companies';
+    var selected={}; // id -> true (bulk)
+    var F = { q:'', status:'all', score:'all', match:'all', source:'all', trl:'all', sectors:[], geos:[], domain:'all', stage:'all', own:'all' };
+
+    // ─── URL persistence ─────────────────────────────────────────────────────
+    function readURL(){
+      var p=new URLSearchParams(location.search);
+      activeTab = p.get('tab')==='schemes'?'schemes':p.get('tab')==='innovators'?'innovators':'companies';
+      F.q=p.get('q')||''; F.status=p.get('status')||'all'; F.score=p.get('score')||'all';
+      F.match=p.get('match')||'all'; F.source=p.get('source')||'all'; F.trl=p.get('trl')||'all';
+      F.domain=p.get('domain')||'all'; F.stage=p.get('stage')||'all'; F.own=p.get('own')||'all';
+      F.sectors=(p.get('sectors')||'').split(',').filter(Boolean);
+      F.geos=(p.get('geos')||'').split(',').filter(Boolean);
+      var sk=p.get('sort'); SORT=sk?{key:sk,dir:p.get('dir')==='desc'?-1:1}:{key:null,dir:0};
+      document.getElementById('search').value=F.q;
+    }
+    function writeURL(){
+      var p=new URLSearchParams();
+      if(activeTab!=='companies')p.set('tab',activeTab);
+      if(F.q)p.set('q',F.q); if(F.status!=='all')p.set('status',F.status);
+      if(F.score!=='all')p.set('score',F.score); if(F.match!=='all')p.set('match',F.match);
+      if(F.source!=='all')p.set('source',F.source); if(F.trl!=='all')p.set('trl',F.trl);
+      if(F.domain!=='all')p.set('domain',F.domain); if(F.stage!=='all')p.set('stage',F.stage); if(F.own!=='all')p.set('own',F.own);
+      if(F.sectors.length)p.set('sectors',F.sectors.join(','));
+      if(F.geos.length)p.set('geos',F.geos.join(','));
+      if(SORT.key&&SORT.dir){p.set('sort',SORT.key);p.set('dir',SORT.dir===1?'asc':'desc');}
+      var qs=p.toString();
+      history.replaceState(null,'',location.pathname+(qs?('?'+qs):''));
+    }
+    function filtersActive(){ return F.q||F.status!=='all'||F.score!=='all'||F.match!=='all'||F.source!=='all'||F.trl!=='all'||F.domain!=='all'||F.stage!=='all'||F.own!=='all'||F.sectors.length||F.geos.length; }
+    function clearAll(){ F={q:'',status:'all',score:'all',match:'all',source:'all',trl:'all',sectors:[],geos:[],domain:'all',stage:'all',own:'all'}; document.getElementById('search').value=''; renderFilters(); writeURL(); render(); }
+
+    // ─── Filter bar ──────────────────────────────────────────────────────────
+    var STATUS_PILLS=[['all','All'],['complete','Ready'],['verified','Verified'],['human_review','Needs Review'],['stub','Processing']];
+    var SCORE_PILLS=[['all','All'],['80','Strong 80+'],['60','Good 60+'],['40','Fair 40+'],['low','Limited data <40']];
+    var MATCH_PILLS=[['all','All'],['60','Best Match 60+'],['40','Good Match 40+']];
+    var SOURCE_PILLS=[['all','All'],['auto','Auto-discovered'],['manual','Manually added'],['inferred','Inferred']];
+    var TRL_PILLS=[['all','All'],['research','Research'],['development','Development'],['deployment','Deployment']];
+    var DOMAIN_PILLS=[['all','All']].concat(DOMAINS);
+    var STAGE_PILLS=[['all','All']].concat(STAGES);
+    var OWN_PILLS=[['all','All'],['open','Open to Transfer'],['closed','Not Open']];
+    var INN_TRL_PILLS=[['all','All'],['research','TRL 1-3'],['development','TRL 4-6'],['deployment','TRL 7-9']];
+
+    function pillRow(label,key,pills){
+      return '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">'+label+'</span><div class="pills">'+
+        pills.map(function(p){return '<span class="pill'+(F[key]===p[0]?' active':'')+'" data-fkey="'+key+'" data-fval="'+p[0]+'">'+esc(p[1])+'</span>';}).join('')+'</div></div>';
+    }
+    function ddRow(label,key,items){
+      var sel=F[key]; var has=sel.length?' has':'';
+      return '<div class="dd'+has+'" data-dd="'+key+'"><button>'+label+(sel.length?(' ('+sel.length+')'):'')+' ▾</button>'+
+        '<div class="ddmenu">'+items.map(function(it){return '<label><input type="checkbox" data-mkey="'+key+'" value="'+esc(it)+'"'+(sel.indexOf(it)!==-1?' checked':'')+'>'+esc(it)+'</label>';}).join('')+'</div></div>';
+    }
+    function renderFilters(){
+      var fb=document.getElementById('filterbar');
+      var isCo = activeTab==='companies';
+      var html='';
+      if(activeTab==='innovators'){
+        html += pillRow('Domain','domain',DOMAIN_PILLS);
+        html += pillRow('TRL','trl',INN_TRL_PILLS);
+        html += pillRow('Stage','stage',STAGE_PILLS);
+        html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Geography</span><div class="pills">'+ddRow('Geography','geos',GEOS)+'</div></div>';
+        html += pillRow('Ownership Transfer','own',OWN_PILLS);
+        var ichips=[];
+        function ichip(label,clear){ return '<span class="achip">'+esc(label)+' <b data-clear=\''+clear+'\'>×</b></span>'; }
+        if(F.q)ichips.push(ichip('Search: "'+F.q+'"','q'));
+        if(F.domain!=='all')ichips.push(ichip('Domain: '+domainLabel(F.domain),'domain'));
+        if(F.trl!=='all')ichips.push(ichip('TRL: '+pillLabel(INN_TRL_PILLS,F.trl),'trl'));
+        if(F.stage!=='all')ichips.push(ichip('Stage: '+stageLabel(F.stage),'stage'));
+        F.geos.forEach(function(g){ichips.push(ichip('Geo: '+g,'geo:'+g));});
+        if(F.own!=='all')ichips.push(ichip('Ownership: '+pillLabel(OWN_PILLS,F.own),'own'));
+        if(ichips.length)html+='<div class="chips-active">'+ichips.join('')+'<button class="clearall" id="clearAll">Clear all filters</button></div>';
+        fb.innerHTML=html;
+        wireFilters();
+        return;
+      }
+      html += pillRow('Status','status',STATUS_PILLS);
+      html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Refine</span><div class="pills">'+
+        ddRow('Sector','sectors',SECTORS)+ddRow('Geography','geos',GEOS)+'</div>';
+      if(isCo){
+        html += '<button class="advtoggle" id="advToggle">Advanced ▾</button>';
+      }
+      html += '</div>';
+      if(isCo){
+        html += '<div class="advanced" id="advanced">'+
+          pillRow('Score','score',SCORE_PILLS)+
+          pillRow('Profile Match','match',MATCH_PILLS)+
+          pillRow('Source','source',SOURCE_PILLS)+
+          pillRow('TRL','trl',TRL_PILLS)+'</div>';
+      } else {
+        html += pillRow('TRL','trl',TRL_PILLS);
+      }
+      // active chips
+      var chips=[];
+      function chip(label,clear){ return '<span class="achip">'+esc(label)+' <b data-clear=\''+clear+'\'>×</b></span>'; }
+      if(F.q)chips.push(chip('Search: "'+F.q+'"','q'));
+      if(F.status!=='all')chips.push(chip('Status: '+pillLabel(STATUS_PILLS,F.status),'status'));
+      F.sectors.forEach(function(s){chips.push(chip('Sector: '+s,'sector:'+s));});
+      F.geos.forEach(function(g){chips.push(chip('Geo: '+g,'geo:'+g));});
+      if(isCo&&F.score!=='all')chips.push(chip('Score: '+pillLabel(SCORE_PILLS,F.score),'score'));
+      if(isCo&&F.match!=='all')chips.push(chip('Match: '+pillLabel(MATCH_PILLS,F.match),'match'));
+      if(isCo&&F.source!=='all')chips.push(chip('Source: '+pillLabel(SOURCE_PILLS,F.source),'source'));
+      if(F.trl!=='all')chips.push(chip('TRL: '+pillLabel(TRL_PILLS,F.trl),'trl'));
+      if(chips.length)html+='<div class="chips-active">'+chips.join('')+'<button class="clearall" id="clearAll">Clear all filters</button></div>';
+      fb.innerHTML=html;
+      wireFilters();
+      var adv=document.getElementById('advanced');
+      if(adv&&advOpen)adv.classList.add('show');
+    }
+    var advOpen=false;
+    function pillLabel(pills,key){ for(var i=0;i<pills.length;i++)if(pills[i][0]===key)return pills[i][1]; return key; }
+    function wireFilters(){
+      var fb=document.getElementById('filterbar');
+      Array.prototype.forEach.call(fb.querySelectorAll('.pill'),function(p){
+        p.addEventListener('click',function(){ F[p.getAttribute('data-fkey')]=p.getAttribute('data-fval'); renderFilters(); writeURL(); render(); });
+      });
+      Array.prototype.forEach.call(fb.querySelectorAll('.dd > button'),function(b){
+        b.addEventListener('click',function(e){ e.stopPropagation(); var dd=b.parentNode; var wasOpen=dd.classList.contains('open'); closeDD(); if(!wasOpen)dd.classList.add('open'); });
+      });
+      Array.prototype.forEach.call(fb.querySelectorAll('input[data-mkey]'),function(i){
+        i.addEventListener('change',function(){ var k=i.getAttribute('data-mkey'); var v=i.value; var arr=F[k]; var idx=arr.indexOf(v); if(i.checked&&idx===-1)arr.push(v); else if(!i.checked&&idx!==-1)arr.splice(idx,1); writeURL(); render(); refreshDDLabels(); });
+      });
+      var at=document.getElementById('advToggle'); if(at)at.addEventListener('click',function(){ advOpen=!advOpen; document.getElementById('advanced').classList.toggle('show',advOpen); });
+      var ca=document.getElementById('clearAll'); if(ca)ca.addEventListener('click',clearAll);
+      Array.prototype.forEach.call(fb.querySelectorAll('.achip b'),function(b){
+        b.addEventListener('click',function(){ var c=b.getAttribute('data-clear');
+          if(c==='q'){F.q='';document.getElementById('search').value='';}
+          else if(c.indexOf('sector:')===0){F.sectors=F.sectors.filter(function(x){return x!==c.slice(7);});}
+          else if(c.indexOf('geo:')===0){F.geos=F.geos.filter(function(x){return x!==c.slice(4);});}
+          else F[c]='all';
+          renderFilters(); writeURL(); render();
+        });
+      });
+    }
+    function refreshDDLabels(){ // update count labels without closing menu
+      Array.prototype.forEach.call(document.querySelectorAll('.dd'),function(dd){
+        var k=dd.getAttribute('data-dd'); var n=F[k].length;
+        dd.classList.toggle('has',n>0);
+        var btn=dd.querySelector('button'); var base=k==='sectors'?'Sector':'Geography';
+        btn.firstChild.nodeValue=base+(n?(' ('+n+')'):'')+' ';
+      });
+    }
+    function closeDD(){ Array.prototype.forEach.call(document.querySelectorAll('.dd.open'),function(d){d.classList.remove('open');}); }
+    document.addEventListener('click',function(){ closeDD(); });
+
+    // ─── Filtering ───────────────────────────────────────────────────────────
+    function matchSearch(name,extra){ if(!F.q)return true; var q=F.q.toLowerCase(); return String(name||'').toLowerCase().indexOf(q)!==-1 || String(extra||'').toLowerCase().indexOf(q)!==-1; }
+    function statusGroup(s){ s=String(s||'').toLowerCase(); if(s==='stub'||s==='enriched')return 'stub'; return s; }
+    function visibleCompanies(){
+      return companies.filter(function(c){
+        if(F.status!=='all'){ var g=statusGroup(c.status); if(F.status==='stub'){ if(g!=='stub')return false; } else if(g!==F.status)return false; }
+        if(F.sectors.length && !F.sectors.some(function(s){return (c.sectorFocus||[]).indexOf(s)!==-1;}))return false;
+        if(F.geos.length && !F.geos.some(function(g){return (c.geographyFocus||[]).indexOf(g)!==-1;}))return false;
+        if(F.score!=='all'){ var sc=displayScore(c); if(F.score==='80'&&sc<80)return false; if(F.score==='60'&&sc<60)return false; if(F.score==='40'&&sc<40)return false; if(F.score==='low'&&sc>=40)return false; }
+        if(F.match!=='all'){ var pm=(c.profileMatch&&c.profileMatch.score)||0; if(F.match==='60'&&pm<60)return false; if(F.match==='40'&&pm<40)return false; }
+        if(F.source!=='all'){ if(F.source==='auto'&&!c.autoDiscovered)return false; if(F.source==='manual'&&!c.manualAdded)return false; if(F.source==='inferred'&&!(c.inferredSectors&&c.inferredSectors.value&&c.inferredSectors.value.length))return false; }
+        if(F.trl!=='all'){ if(!c.trl||c.trl.band!==F.trl)return false; }
+        if(!matchSearch(c.name,(c.sectorFocus||[]).join(' ')))return false;
+        return true;
+      });
+    }
+    function visibleSchemes(){
+      return schemes.filter(function(s){
+        if(F.status!=='all'&&F.status!=='complete'&&F.status!=='verified'){ /* schemes only 'active' */ if(F.status==='stub'||F.status==='human_review')return false; }
+        if(F.sectors.length && !F.sectors.some(function(x){return (s.sectorTags||[]).indexOf(x)!==-1;}))return false;
+        if(F.geos.length && !F.geos.some(function(x){return (s.geographyScope||[]).indexOf(x)!==-1 || (s.geographyScope||[]).indexOf('Pan-India')!==-1;}))return false;
+        if(F.trl!=='all'){ if(!s.trl||s.trl.band!==F.trl)return false; }
+        if(!matchSearch(s.name,(s.sectorTags||[]).join(' ')+' '+s.ministry))return false;
+        return true;
+      });
+    }
+
+    // ─── Column sorting (click header: asc → desc → default) ────────────────
+    var SORT={key:null,dir:0}; // dir: 1 asc, -1 desc, 0 default order
+    function cycleSort(key){ if(SORT.key!==key){SORT={key:key,dir:1};} else if(SORT.dir===1){SORT.dir=-1;} else {SORT={key:null,dir:0};} }
+    function thSort(key,label,tip){ var arrow=SORT.key===key&&SORT.dir?(SORT.dir===1?' ↑':' ↓'):''; var cls='sortable'+(SORT.key===key&&SORT.dir?' sorted':'')+(tip?' tip':''); return '<th class="'+cls+'" data-sort="'+key+'"'+(tip?' title="'+esc(tip)+'"':'')+'>'+label+arrow+'</th>'; }
+    function applySort(list,getters){
+      if(!SORT.key||!SORT.dir||!getters[SORT.key])return list;
+      var g=getters[SORT.key],d=SORT.dir;
+      return list.slice().sort(function(a,b){
+        var va=g(a),vb=g(b);
+        if(va==null&&vb==null)return 0; if(va==null)return 1; if(vb==null)return -1; // missing values sink
+        if(typeof va==='string'||typeof vb==='string')return d*String(va).localeCompare(String(vb));
+        return d*(va-vb);
+      });
+    }
+    function wireSort(){
+      Array.prototype.forEach.call(document.querySelectorAll('#thead th[data-sort]'),function(th){
+        th.addEventListener('click',function(){ cycleSort(th.getAttribute('data-sort')); writeURL(); render(); });
+      });
+    }
+    var STAGE_ORDER={ideation:0,prototype:1,pilot:2,scale:3,deployed:4};
+    var COMPANY_SORT_GETTERS={
+      name:function(c){return String(c.name||'').toLowerCase();},
+      status:function(c){return statusInfo(c.status).label;},
+      sector:function(c){return c.topSector?String(c.topSector).toLowerCase():null;},
+      score:function(c){return displayScore(c);},
+      match:function(c){return (c.profileMatch&&c.profileMatch.score)||0;},
+      trl:function(c){return c.trl&&c.trl.band!=='unknown'?c.trl.min:null;}
+    };
+    var INNOVATOR_SORT_GETTERS={
+      name:function(n){return String(n.name||'').toLowerCase();},
+      type:function(n){return String(n.type||'');},
+      domain:function(n){return domainLabel(n.domain).toLowerCase();},
+      trl:function(n){return n.trlCurrent!=null?n.trlCurrent:null;},
+      stage:function(n){return STAGE_ORDER[n.innovationStage]!=null?STAGE_ORDER[n.innovationStage]:null;},
+      geo:function(n){return (n.geography&&n.geography.length)?String(n.geography[0]).toLowerCase():null;},
+      sus:function(n){return n.sustainabilityScore||0;}
+    };
+
+    // ─── Rendering ───────────────────────────────────────────────────────────
+    // Each section is guarded so a failure in one (e.g. insights) can never block
+    // the rest of the UI — notably the detail panel (was Critical Bug 1).
+    function render(){ try{ if(activeTab==='companies')renderCompanies(); else if(activeTab==='innovators')renderInnovators(); else renderSchemes(); }catch(e){} try{ renderFreshBanner(); }catch(e){} try{ renderInsights(); }catch(e){} }
+    function topSector(c){ return c.topSector || '—'; }
+
+    function renderCompanies(){
+      document.getElementById('thead').innerHTML='<tr><th class="chk"><input type="checkbox" id="selAll"></th>'+
+        thSort('name','Name')+thSort('status','Status')+thSort('sector','Top Sector')+
+        thSort('score','Score','Data completeness 0–100: sectors, geographies, spend, sources, contact')+
+        thSort('match','Profile Match','How well this company fits your saved profile (sectors, geographies, keywords, technologies)')+
+        thSort('trl','TRL','Technology Readiness Level inferred from CSR project language')+'<th></th></tr>';
+      wireSort();
+      var rows=document.getElementById('rows'); var list=applySort(visibleCompanies(),COMPANY_SORT_GETTERS);
+      document.getElementById('tableCount').textContent=list.length+' of '+companies.length;
+      if(!list.length){ rows.innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">No companies match your filters.</td></tr>'; wireSelAll(); return; }
+      rows.innerHTML=list.map(function(c){
+        var si=statusInfo(c.status), score=displayScore(c), pm=(c.profileMatch&&c.profileMatch.score)||0;
+        var badge=c.autoDiscovered?'<span class="mbadge auto">✦ Auto</span>':c.manualAdded?'<span class="mbadge">＋ Manual</span>':'';
+        return '<tr data-id="'+esc(c.id)+'"'+(c.id===selectedId&&selectedKind==='company'?' class="selected"':'')+'>'+
+          '<td class="chk"><input type="checkbox" data-sel="'+esc(c.id)+'"'+(selected[c.id]?' checked':'')+'></td>'+
+          '<td><div class="cname">'+esc(c.name)+badge+'</div><div class="csub">'+esc(c.category||'')+'</div></td>'+
+          '<td><span class="badge '+si.cls+'">'+esc(si.label)+'</span></td>'+
+          '<td>'+esc(topSector(c))+'</td>'+
+          '<td>'+barHtml(score)+'</td>'+
+          '<td><b style="color:var(--primary)">'+pm+'</b> <span style="color:var(--text-muted);font-size:11px">/100</span></td>'+
+          '<td>'+trlBadge(c.trl)+'</td>'+
+          '<td class="delcell"><button class="rowdel" data-del="'+esc(c.id)+'" aria-label="Delete">'+TRASH_SVG+'</button></td></tr>';
+      }).join('');
+      wireRows('company'); wireSelAll(); updateBulkBar();
+    }
+
+    function renderSchemes(){
+      document.getElementById('thead').innerHTML='<tr><th>Scheme</th><th>Ministry</th><th>Sectors</th><th>Status</th><th class="tip" title="Technology Readiness Level inferred from eligibility text">TRL</th></tr>';
+      var rows=document.getElementById('rows'); var list=visibleSchemes();
+      document.getElementById('tableCount').textContent=list.length+' of '+schemes.length;
+      if(!list.length){ rows.innerHTML='<tr><td colspan="5" style="color:var(--text-muted);padding:24px">No schemes match your filters.</td></tr>'; return; }
+      rows.innerHTML=list.map(function(s){
+        var si=statusInfo(s.status); var secs=(s.sectorTags||[]).slice(0,2).join(', ')||'—'; var more=(s.sectorTags||[]).length>2?' +'+((s.sectorTags||[]).length-2):'';
+        return '<tr data-id="'+esc(s.id)+'"'+(s.id===selectedId&&selectedKind==='scheme'?' class="selected"':'')+'>'+
+          '<td><div class="cname">'+esc(s.name)+'</div></td>'+
+          '<td><div class="csub">'+esc(s.ministry)+'</div></td>'+
+          '<td>'+esc(secs)+esc(more)+'</td>'+
+          '<td><span class="badge '+si.cls+'">'+esc(si.label)+'</span></td>'+
+          '<td>'+trlBadge(s.trl)+'</td></tr>';
+      }).join('');
+      wireRows('scheme');
+    }
+
+    function visibleInnovators(){
+      return innovators.filter(function(n){
+        if(F.domain!=='all'&&n.domain!==F.domain)return false;
+        if(F.trl!=='all'&&trlNumBand(n.trlCurrent)!==F.trl)return false;
+        if(F.stage!=='all'&&n.innovationStage!==F.stage)return false;
+        if(F.geos.length && !F.geos.some(function(g){return (n.geography||[]).indexOf(g)!==-1;}))return false;
+        if(F.own==='open'&&!n.ownershipTransferOpen)return false;
+        if(F.own==='closed'&&n.ownershipTransferOpen)return false;
+        if(!matchSearch(n.name,domainLabel(n.domain)+' '+(n.geography||[]).join(' ')))return false;
+        return true;
+      });
+    }
+    function renderInnovators(){
+      document.getElementById('thead').innerHTML='<tr>'+
+        thSort('name','Name')+thSort('type','Type')+thSort('domain','Domain')+
+        thSort('trl','TRL','Current Technology Readiness Level (1-9)')+thSort('stage','Stage')+thSort('geo','Geography')+
+        thSort('sus','Sustainability','Deterministic sustainability score from circularity indicators + green vocabulary')+'<th></th></tr>';
+      wireSort();
+      var rows=document.getElementById('rows'); var list=applySort(visibleInnovators(),INNOVATOR_SORT_GETTERS);
+      document.getElementById('tableCount').textContent=list.length+' of '+innovators.length;
+      if(!list.length){ rows.innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">No innovators match your filters.</td></tr>'; return; }
+      var typeLbl={startup:'Startup',individual:'Individual',research_institute:'Research Inst.'};
+      rows.innerHTML=list.map(function(n){
+        var geos=(n.geography||[]).slice(0,2).join(', ')||'—';
+        return '<tr data-id="'+esc(n.id)+'"'+(n.id===selectedId&&selectedKind==='innovator'?' class="selected"':'')+'>'+
+          '<td><div class="cname">'+esc(n.name)+(n.ownershipTransferOpen?' <span class="mbadge auto" title="Open to technology transfer/licensing">⇄ Transfer OK</span>':'')+'</div><div class="csub">'+esc(n.founderName||'')+'</div></td>'+
+          '<td><span class="csub">'+esc(typeLbl[n.type]||n.type)+'</span></td>'+
+          '<td>'+esc(domainLabel(n.domain))+'</td>'+
+          '<td>'+trlNumBadge(n.trlCurrent)+'</td>'+
+          '<td>'+esc(stageLabel(n.innovationStage))+'</td>'+
+          '<td>'+esc(geos)+'</td>'+
+          '<td>'+susBar(n.sustainabilityScore||0)+'</td>'+
+          '<td class="delcell"><button class="rowdel" data-del="'+esc(n.id)+'" aria-label="Delete">'+TRASH_SVG+'</button></td></tr>';
+      }).join('');
+      wireRows('innovator');
+    }
+
+    function wireRows(kind){
+      var rows=document.getElementById('rows');
+      Array.prototype.forEach.call(rows.querySelectorAll('tr[data-id]'),function(tr){
+        tr.addEventListener('click',function(e){ if(e.target.getAttribute&&(e.target.getAttribute('data-sel')!==null||e.target.classList.contains('rowdel')))return; if(kind==='company')selectCompany(tr.getAttribute('data-id')); else if(kind==='innovator')selectInnovator(tr.getAttribute('data-id')); else selectScheme(tr.getAttribute('data-id')); });
+      });
+      Array.prototype.forEach.call(rows.querySelectorAll('.rowdel'),function(b){ b.addEventListener('click',function(e){e.stopPropagation(); if(kind==='innovator')deleteInnovatorRow(b.getAttribute('data-del')); else deleteCompany(b.getAttribute('data-del'));}); });
+      Array.prototype.forEach.call(rows.querySelectorAll('input[data-sel]'),function(i){ i.addEventListener('click',function(e){e.stopPropagation();}); i.addEventListener('change',function(){ var id=i.getAttribute('data-sel'); if(i.checked)selected[id]=true; else delete selected[id]; updateBulkBar(); }); });
+    }
+    function wireSelAll(){ var sa=document.getElementById('selAll'); if(!sa)return; var list=visibleCompanies(); sa.checked=list.length>0&&list.every(function(c){return selected[c.id];}); sa.addEventListener('change',function(){ list.forEach(function(c){ if(sa.checked)selected[c.id]=true; else delete selected[c.id]; }); renderCompanies(); }); }
+
+    // ─── Bulk ────────────────────────────────────────────────────────────────
+    function selectedIds(){ return Object.keys(selected); }
+    function updateBulkBar(){ var ids=selectedIds(); var bar=document.getElementById('bulkbar'); bar.classList.toggle('show',ids.length>0&&activeTab==='companies'); document.getElementById('bulkCount').textContent=ids.length+' selected'; }
+    function bulkPost(action){ var ids=selectedIds(); if(!ids.length)return Promise.resolve(); return fetch('/api/companies/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:action,ids:ids})}).then(function(r){return r.json();}); }
+    document.getElementById('bulkReenrich').addEventListener('click',function(){ bulkPost('reenrich').then(function(r){ showToast('Queued '+(r&&r.affected||0)+' for re-enrichment'); }); });
+    document.getElementById('bulkReviewed').addEventListener('click',function(){ bulkPost('mark_reviewed').then(function(r){ showToast('Marked '+(r&&r.affected||0)+' reviewed'); selected={}; loadCompanies(); loadStats(); }); });
+    document.getElementById('bulkExport').addEventListener('click',function(){ var ids=selectedIds(); if(!ids.length)return; window.location.href='/api/export/csv?ids='+encodeURIComponent(ids.join(',')); });
+    document.getElementById('bulkClear').addEventListener('click',function(){ selected={}; renderCompanies(); });
+    document.getElementById('bulkDelete').addEventListener('click',function(){ var ids=selectedIds(); if(!ids.length)return; var names=companies.filter(function(c){return selected[c.id];}).map(function(c){return '<span class="chip">'+esc(c.name)+'</span>';}).join(''); document.getElementById('bulkDelList').innerHTML=names; document.getElementById('bulkDelModal').classList.add('show'); });
+    document.getElementById('bulkDelConfirm').addEventListener('click',function(){ bulkPost('delete').then(function(r){ showToast('Deleted '+(r&&r.affected||0)); selected={}; document.getElementById('bulkDelModal').classList.remove('show'); loadCompanies(); loadStats(); }); });
+    ['bulkDelClose','bulkDelCancel'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(){ document.getElementById('bulkDelModal').classList.remove('show'); }); });
+
+    // ─── Detail: companies (tabbed) ──────────────────────────────────────────
+    // Clicking the already-selected row deselects it (back to the empty state).
+    function clearSelection(){ selectedId=null; selectedKind=null; document.getElementById('detail').innerHTML='<div class="empty">Select an item to see details.</div>'; try{render();}catch(e){} }
+    function selectCompany(id){
+      if(selectedId===id&&selectedKind==='company'){ clearSelection(); return; }
+      selectedId=id; selectedKind='company'; detailTab='overview';
+      var detail=document.getElementById('detail'); detail.innerHTML='<div class="empty">Loading…</div>';
+      // Fetch + render the detail FIRST so a table/insights render error can't block it.
+      fetch('/api/companies/'+id).then(function(r){return r.json();}).then(function(res){ renderCompanyDetail(res); }).catch(function(){ detail.innerHTML='<div class="empty">Could not load details.</div>'; });
+      try { renderCompanies(); } catch(e) {}  // refresh row highlight; never blocks detail
+    }
+    function chips(arr){ if(!arr||!arr.length)return '<span class="v" style="color:var(--text-muted)">None found</span>'; return '<div class="chips">'+arr.map(function(x){return '<span class="chip">'+esc(x)+'</span>';}).join('')+'</div>'; }
+    function field(k,v){ return '<div class="field"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
+    // ─── Freshness helpers ───────────────────────────────────────────────────
+    function fmtDate(d){ if(!d)return null; var t=Date.parse(d); if(isNaN(t))return String(d); return new Date(t).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric'}); }
+    function fmtDateTime(d){ if(!d)return null; var t=Date.parse(d); if(isNaN(t))return String(d); return new Date(t).toLocaleString('en-IN',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+    function daysSince(d){ if(!d)return null; var t=Date.parse(d); if(isNaN(t))return null; return Math.floor((Date.now()-t)/86400000); }
+    function outdatedBadge(d,limit){ var n=daysSince(d); if(n===null||n<=(limit||30))return ''; return ' <span class="badge amber" title="Older than '+(limit||30)+' days">Data may be outdated</span>'; }
+    // "Last enriched" line with exact date+time; amber badge past 30 days.
+    function freshnessHtml(enrichedAt){
+      var v=enrichedAt?('<b>'+esc(fmtDateTime(enrichedAt))+'</b>'+outdatedBadge(enrichedAt,30)):'<span style="color:var(--text-muted)">Never enriched — click ↻ Re-enrich now</span>';
+      return field('Last Enriched',v);
+    }
+    // Key Contacts card list: name, title, literal-extracted email (or explicit
+    // "No public email found"), confidence badge, source + source-page date.
+    // Emails here are ALWAYS literal strings found in a source page — never
+    // constructed. as_of is the page's own recency marker (e.g. Wikipedia's
+    // "last edited"); when it's old or absent we say so instead of implying current.
+    function contactsHtml(list){
+      if(!list||!list.length)return '<span style="color:var(--text-muted)">No contacts found in any source yet — re-enrich to search again.</span>';
+      list=list.slice().sort(function(a,b){ return (a.name?0:1)-(b.name?0:1); }); // named people first, official channels below
+      return list.map(function(k){
+        var conf=String(k.confidence||'low'); var cls=conf==='high'?'green':conf==='medium'?'blue':'grey';
+        var lead=k.name?('<b>'+esc(k.name)+'</b> <span class="csub">'+esc(k.title||'')+'</span>'):('<b>'+esc(k.title||'Contact')+'</b>');
+        var emailLine=k.email?'<div><a href="mailto:'+esc(k.email)+'">'+esc(k.email)+'</a> <span class="csub">found in '+esc(k.source||'source')+'</span></div>':'<div class="csub">No public email found</div>';
+        var prov;
+        if(k.as_of){ prov='As of '+esc(fmtDate(k.as_of))+' per '+esc(k.source||'source')+((daysSince(k.as_of)||0)>365?' — may be outdated':''); }
+        else if(k.extracted_at){ prov='via '+esc(k.source||'source')+' · page date unknown · extracted '+esc(fmtDate(k.extracted_at)); }
+        else { prov=k.source?('via '+esc(k.source)):''; }
+        var unver=k.verification?'<div style="color:var(--warn,#b45309);font-size:12px;margin-top:2px">⚠ '+esc(k.verification)+'</div>':'';
+        return '<div style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+          '<div>'+lead+emailLine+unver+'</div>'+
+          '<div style="text-align:right;flex-shrink:0"><span class="badge '+cls+'" title="Extraction confidence">'+esc(conf)+'</span>'+
+          (prov?'<div class="csub" style="margin-top:2px;max-width:190px">'+prov+'</div>':'')+'</div></div>';
+      }).join('');
+    }
+    // Per-field provenance: "Extracted <date> from <link>" + verification state.
+    function fieldProv(meta,verifiedAt,enrichedAt){
+      if(!meta||(!meta.sourceUrl&&!meta.extractedAt))return '';
+      var bits=[];
+      if(meta.extractedAt)bits.push('Extracted '+esc(fmtDate(meta.extractedAt)));
+      if(meta.sourceUrl){ var dom=String(meta.sourceUrl).replace(/^https?:\/\/(www\.)?/,'').split('/')[0]; bits.push('from <a href="'+esc(meta.sourceUrl)+'" target="_blank" rel="noopener">'+esc(dom)+' ↗</a>'); }
+      var ver=(verifiedAt&&enrichedAt&&Date.parse(verifiedAt)>=Date.parse(enrichedAt))?' · Verified '+esc(fmtDate(verifiedAt)):' · <span style="color:var(--warn,#b45309)">Unverified since '+esc(fmtDate(meta.extractedAt||enrichedAt))+'</span>';
+      return '<div class="hint">'+bits.join(' ')+ver+'</div>';
+    }
+    // Sources of the last enrichment run: label — real link, ✓/✗, fetch date.
+    function sourcesHtml(sources){
+      if(!sources||!sources.length)return '<span style="color:var(--text-muted)">No source record for the last run — re-enrich to capture one.</span>';
+      return sources.map(function(s){
+        var dom=String(s.url||'').replace(/^https?:\/\/(www\.)?/,'').split('/')[0];
+        return '<div style="font-size:12.5px;margin-bottom:3px">'+(s.success?'<span style="color:var(--success)">✓</span>':'<span style="color:var(--text-muted)">✗</span>')+' '+esc(s.label||'')+' — <a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(dom)+' ↗</a>'+(s.fetched_at?' <span class="csub">fetched '+esc(fmtDate(s.fetched_at))+'</span>':'')+(s.success?'':' <span class="csub">(no usable text)</span>')+'</div>';
+      }).join('');
+    }
+    function ownershipHtml(v){
+      if(v===true)return '<span class="badge green">Open to license or transfer technology</span>';
+      if(v===false)return '<span class="badge grey">Not open to transfer</span>';
+      return '<span class="badge grey">No signal found in sources</span>';
+    }
+
+    function renderCompanyDetail(res){
+     try {
+      var c=res.company||{}; var si=statusInfo(c.status); var score=displayScore(c); var verdict=scoreVerdict(score);
+      var pm=res.profileMatch||{score:0,reasons:[]}; var ov=c.manualOverrides||{};
+      function mtag(k){ return ov[k]?' <span class="mbadge">✏ Manual</span>':''; }
+      var accepts=c.acceptsProposals===true?'Yes':c.acceptsProposals===false?'No':'Unknown';
+      var spend=Number(c.csrSpendActualCr)>0?'₹'+c.csrSpendActualCr+' Cr':'Not found';
+      var email=c.contactEmail?'<a href="mailto:'+esc(c.contactEmail)+'">'+esc(c.contactEmail)+'</a>':'<span style="color:var(--text-muted)">No public email found in any source</span>';
+      var portal=c.portalUrl?'<a href="'+esc(c.portalUrl)+'" target="_blank" rel="noopener">Open portal ↗</a>':(c.website?'<a href="'+esc(c.website)+'" target="_blank" rel="noopener">'+esc(c.website)+' ↗</a>':'Not found');
+
+      var head='<h3>'+esc(c.name)+'</h3><div class="meta">'+esc(c.category||'')+' · <span class="badge '+si.cls+'">'+esc(si.label)+'</span> · '+trlBadge(c.trl)+'</div>';
+      var tabs='<div class="dtabs">'+['overview','csr','match','history'].map(function(t){ var lbl={overview:'Overview',csr:'CSR Data',match:'Match Analysis',history:'History'}[t]; return '<button class="dtab'+(detailTab===t?' active':'')+'" data-dtab="'+t+'">'+lbl+'</button>'; }).join('')+'</div>';
+
+      var body='';
+      if(detailTab==='overview'){
+        body+='<div class="actions" style="justify-content:flex-end;margin-bottom:10px"><button class="primary" id="reEnrich">↻ Re-enrich now</button><button id="editBtn">✏ Edit</button></div>';
+        body+=freshnessHtml(c.enrichedAt);
+        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Data Score</span></div><div class="top"><span class="num">'+score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span><span class="verdict" style="color:'+verdict.color+'">'+verdict.text+'</span></div><div class="bar"><span style="width:'+score+'%;background:'+verdict.color+'"></span></div></div>';
+        body+=field('Top Sectors'+mtag('sector_focus'),chips((c.sectorFocus||[]).slice(0,3)));
+        if(c.domainFocus&&c.domainFocus.length)body+=field('Domain Focus',chips(c.domainFocus.map(domainLabel)));
+        body+=field('Top Geographies'+mtag('geography_focus'),chips((c.geographyFocus||[]).slice(0,3)));
+        body+=field('CSR Spend'+mtag('csr_spend_cr'),esc(spend));
+        body+=field('Key Contacts',contactsHtml(c.keyContacts));
+      } else if(detailTab==='csr'){
+        var fm=c.fieldMeta||{};
+        body+=freshnessHtml(c.enrichedAt);
+        body+=field('Sectors <span class="srcbadge extracted">Extracted</span>'+mtag('sector_focus'),chips(c.sectorFocus)+fieldProv(fm.sectors,c.verifiedAt,c.enrichedAt));
+        body+=field('Geographies <span class="srcbadge extracted">Extracted</span>'+mtag('geography_focus'),chips(c.geographyFocus)+fieldProv(fm.geographies,c.verifiedAt,c.enrichedAt));
+        body+=field('CSR Spend <span class="srcbadge extracted">Extracted</span>'+mtag('csr_spend_cr'),esc(spend)+fieldProv(fm.spend,c.verifiedAt,c.enrichedAt));
+        body+=field('Sources (last enrichment run)',sourcesHtml(c.sources));
+        if(c.domainFocus&&c.domainFocus.length)body+=field('Domain Focus <span class="srcbadge extracted">Extracted</span>',chips(c.domainFocus.map(domainLabel)));
+        body+=field('Accepts Proposals',esc(accepts));
+        body+=field('Contact',email+(c.contactEmail?fieldProv(fm.contactEmail,c.verifiedAt,c.enrichedAt):''));
+        body+=field('Application Portal / Website',portal);
+        body+=field('Key Contacts',contactsHtml(c.keyContacts));
+        body+=field('Ownership / Technology Transfer',ownershipHtml(c.ownershipTransferOpen));
+        var comous=c.mouHistory||[];
+        body+=field('MoU History',comous.length?('<ul style="padding-left:16px">'+comous.map(function(m){return '<li style="font-size:12.5px"><b>'+esc(m.partner||'')+'</b>'+(m.year?' ('+esc(m.year)+')':'')+(m.description?' — '+esc(m.description):'')+'</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">No MoUs found in sources.</span>');
+        if(c.keyPrograms&&c.keyPrograms.length)body+=field('Key Programs',chips(c.keyPrograms));
+        // inferred/estimated
+        var inf='';
+        if(c.inferredSectors&&c.inferredSectors.value&&c.inferredSectors.value.length)inf+=field('Sectors <span class="srcbadge inferred">Inferred</span>',chips(c.inferredSectors.value)+(c.inferredSectors.basis?'<div class="hint">Basis: '+esc(c.inferredSectors.basis)+'</div>':''));
+        if(c.inferredGeographies&&c.inferredGeographies.value&&c.inferredGeographies.value.length)inf+=field('Geography <span class="srcbadge inferred">Inferred</span>',chips(c.inferredGeographies.value)+(c.inferredGeographies.basis?'<div class="hint">Basis: '+esc(c.inferredGeographies.basis)+'</div>':''));
+        if(c.estimatedSpend&&c.estimatedSpend.value!=null)inf+=field('CSR Spend <span class="srcbadge estimated">Estimated</span>','₹'+esc(c.estimatedSpend.value)+' Cr'+(c.estimatedSpend.basis?'<div class="hint">Basis: '+esc(c.estimatedSpend.basis)+'</div>':''));
+        body+=inf||'';
+      } else if(detailTab==='match'){
+        body+='<div class="matchblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Profile Match</span><span class="num">'+pm.score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+pm.score+'%;background:var(--primary)"></span></div><div class="why"><div class="k">Why this match</div>'+((pm.reasons&&pm.reasons.length)?'<ul>'+pm.reasons.map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ul>':'<div class="none">No overlap with your profile yet — set it via ⚙ Our Profile.</div>')+'</div></div>';
+        body+=field('TRL Alignment',trlBadge(c.trl)+(c.trl&&c.trl.basis?'<div class="hint">Signals: '+esc(c.trl.basis)+'</div>':'<div class="hint">No readiness signals found in sources.</div>'));
+        body+='<div class="field"><div class="k">Best Matching Innovators</div><div id="coInnMatches"><span style="color:var(--text-muted);font-size:12.5px">Loading…</span></div></div>';
+      } else {
+        body+=field('Added',esc(fmtDateTime(c.createdAt)||'—'));
+        body+=freshnessHtml(c.enrichedAt);
+        body+=field('Verified',esc(fmtDateTime(c.verifiedAt)||'—'));
+        body+=field('Data Sources',sourcesHtml(c.sources));
+        if(c.discoverySource)body+=field('Discovered via',esc(c.discoverySource));
+        // 5-year CSR spend trend — every FY figure found across sources/history.
+        var spendYears=Object.keys(c.csrSpendByYear||{});
+        body+=field('CSR Spend Trend (5-yr)',spendYears.length?('<ul style="padding-left:16px">'+spendYears.sort().map(function(y){return '<li style="font-size:12.5px">'+esc(y)+': ₹'+esc(c.csrSpendByYear[y])+' Cr</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">Only single-year data so far — multi-year figures appear as drift detection runs.</span>');
+        var hist=res.history||[];
+        body+=field('Drift / Change Signals',hist.length?('<ul style="padding-left:16px">'+hist.slice(0,8).map(function(h){return '<li>'+esc(h.fieldName)+': '+esc(h.changeType)+'</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">No changes recorded.</span>');
+      }
+      body+='<div class="actions" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"><button id="delBtn" style="margin-left:auto;color:var(--danger);border-color:#f3c2c2">🗑 Delete</button></div>';
+
+      document.getElementById('detail').innerHTML=head+tabs+body;
+      Array.prototype.forEach.call(document.querySelectorAll('.dtab'),function(b){ b.addEventListener('click',function(){ detailTab=b.getAttribute('data-dtab'); renderCompanyDetail(res); }); });
+      var re=document.getElementById('reEnrich'); if(re)re.addEventListener('click',function(){ reEnrich(c.id,re); });
+      var eb=document.getElementById('editBtn'); if(eb)eb.addEventListener('click',function(){ openEdit(c); });
+      var db=document.getElementById('delBtn'); if(db)db.addEventListener('click',function(){ deleteCompany(c.id); });
+      if(detailTab==='match')loadFunderInnovatorMatches(c.id);
+     } catch(err){ document.getElementById('detail').innerHTML='<div class="empty">Could not render details ('+esc(err.message)+').</div>'; }
+    }
+    function loadFunderInnovatorMatches(companyId){
+      fetch('/api/match/funders/'+companyId).then(function(r){return r.json();}).then(function(res){
+        var box=document.getElementById('coInnMatches'); if(!box)return;
+        var ms=(res.matches||[]).slice(0,5);
+        box.innerHTML=ms.length?ms.map(matchCard).join(''):'<span style="color:var(--text-muted);font-size:12.5px">No matching innovators yet — add some in the Innovators tab.</span>';
+      }).catch(function(){ var box=document.getElementById('coInnMatches'); if(box)box.innerHTML='<span style="color:var(--text-muted);font-size:12.5px">Could not load innovator matches.</span>'; });
+    }
+
+    function selectScheme(id){
+      if(selectedId===id&&selectedKind==='scheme'){ clearSelection(); return; }
+      selectedId=id; selectedKind='scheme'; render(); var detail=document.getElementById('detail'); detail.innerHTML='<div class="empty">Loading…</div>';
+      fetch('/api/schemes/'+id).then(function(r){return r.json();}).then(function(s){
+        var si=statusInfo(s.status);
+        var html='<h3>'+esc(s.name)+'</h3><div class="meta">'+esc(s.ministry)+' · <span class="badge '+si.cls+'">'+esc(si.label)+'</span> · '+trlBadge(s.trl)+'</div>';
+        html+=field('Description',esc(s.description));
+        html+=field('Eligibility Criteria',esc(s.eligibilityText));
+        html+=field('Funding Amount',esc(s.fundingAmount));
+        html+=field('Application Deadline',esc(s.applicationDeadline));
+        html+=field('Sectors',chips(s.sectorTags));
+        html+=field('States Covered',chips(s.geographyScope));
+        html+=field('Beneficiaries',chips(s.beneficiaryTypes));
+        html+=field('How to Apply','<a href="'+esc(s.sourceUrl)+'" target="_blank" rel="noopener">Open scheme portal ↗</a>');
+        document.getElementById('detail').innerHTML=html;
+      }).catch(function(){ document.getElementById('detail').innerHTML='<div class="empty">Could not load scheme.</div>'; });
+    }
+
+    // ─── Detail: innovators (tabbed) ─────────────────────────────────────────
+    function selectInnovator(id){
+      if(selectedId===id&&selectedKind==='innovator'){ clearSelection(); return; }
+      selectedId=id; selectedKind='innovator'; detailTab='overview';
+      var detail=document.getElementById('detail'); detail.innerHTML='<div class="empty">Loading…</div>';
+      fetch('/api/innovators/'+id).then(function(r){return r.json();}).then(function(n){ renderInnovatorDetail(n); }).catch(function(){ detail.innerHTML='<div class="empty">Could not load innovator.</div>'; });
+      try { renderInnovators(); } catch(e) {}
+    }
+    function matchCard(m){
+      var connect=m.contact_email?'<a href="mailto:'+esc(m.contact_email)+'?subject='+encodeURIComponent('Funding enquiry via CSR Intelligence platform')+'"><button class="primary" style="padding:4px 10px;font-size:12px">✉ Connect</button></a>':'<span class="csub">No contact email</span>';
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+        '<div><b>'+esc(m.name)+'</b> <span class="csub">'+esc(m.kind==='scheme'?'Govt Scheme':(m.kind?'Company':domainLabel(m.domain)))+'</span></div>'+
+        '<div style="display:flex;align-items:center;gap:10px"><b style="color:var(--primary)">'+m.score+'</b><span class="csub">/100</span>'+connect+'</div></div>'+
+        ((m.reasons&&m.reasons.length)?'<ul style="margin:6px 0 0;padding-left:16px">'+m.reasons.map(function(r){return '<li style="font-size:12px;color:var(--text-muted)">'+esc(r)+'</li>';}).join('')+'</ul>':'')+
+        '</div>';
+    }
+    function renderInnovatorDetail(n){
+     try {
+      var si=statusInfo(n.status);
+      var head='<h3>'+esc(n.name)+'</h3><div class="meta">'+esc(domainLabel(n.domain))+' · '+esc(stageLabel(n.innovationStage))+' · <span class="badge '+si.cls+'">'+esc(si.label)+'</span> · '+trlNumBadge(n.trlCurrent)+'</div>';
+      var tabs='<div class="dtabs">'+['overview','technology','sustainability','partnerships','match'].map(function(t){ var lbl={overview:'Overview',technology:'Technology',sustainability:'Sustainability',partnerships:'Partnerships',match:'Match Analysis'}[t]; return '<button class="dtab'+(detailTab===t?' active':'')+'" data-dtab="'+t+'">'+lbl+'</button>'; }).join('')+'</div>';
+      var body='';
+      if(detailTab==='overview'){
+        body+=field('Description',esc(n.description||'—'));
+        body+=field('Founder(s)',esc(n.founderName||(n.founders&&n.founders.length?n.founders.join(', '):'Not found')));
+        if(n.foundingYear)body+=field('Founded',esc(n.foundingYear));
+        body+=field('Geography',chips(n.geography));
+        body+=field('Website',n.website?'<a href="'+esc(n.website)+'" target="_blank" rel="noopener">'+esc(n.website)+' ↗</a>':'—');
+        body+=field('Contact',n.contactEmail?'<a href="mailto:'+esc(n.contactEmail)+'">'+esc(n.contactEmail)+'</a>':'—');
+        body+=field('Key Contacts',contactsHtml(n.keyContacts));
+        var facts=[];
+        if(n.teamSize!=null)facts.push('Team: '+n.teamSize);
+        if(n.fundingRaisedCr!=null)facts.push('Raised: ₹'+n.fundingRaisedCr+' Cr');
+        if(n.annualRevenueCr!=null)facts.push('Revenue: ₹'+n.annualRevenueCr+' Cr');
+        if(facts.length)body+=field('Key Figures',esc(facts.join(' · ')));
+        body+=field('Last Enriched',n.researchAt?('<b>'+esc(fmtDateTime(n.researchAt))+'</b> · '+esc((n.sourceUrls||[]).length)+' source(s)'+outdatedBadge(n.researchAt,30)):'<span style="color:var(--text-muted)">Never — deep research has not run yet</span>');
+      } else if(detailTab==='technology'){
+        body+=field('Technology Solution',esc(n.description||'—'));
+        body+=field('USP',esc(n.usp||'—'));
+        body+=field('TRL Status',trlNumBadge(n.trlCurrent)+' <span class="csub">current</span> &nbsp;→&nbsp; '+trlNumBadge(n.trlTarget)+' <span class="csub">target</span>');
+        body+=field('Patents Filed',esc(n.patentsFiled));
+        if(n.awards&&n.awards.length)body+=field('Awards / Recognition','<ul style="padding-left:16px">'+n.awards.map(function(a){return '<li style="font-size:12.5px">'+esc(a)+'</li>';}).join('')+'</ul>');
+      } else if(detailTab==='sustainability'){
+        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Sustainability Score</span></div><div class="top"><span class="num">'+(n.sustainabilityScore||0)+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+(n.sustainabilityScore||0)+'%;background:var(--success)"></span></div></div>';
+        var ci=n.circularityIndicators||{};
+        var ciLbl=[['closed_loop','Closed Loop'],['zero_waste','Zero Waste'],['renewable_energy','Renewable Energy'],['circular_economy','Circular Economy']];
+        body+=field('Circularity Indicators','<div class="chips">'+ciLbl.map(function(p){ return '<span class="chip" style="'+(ci[p[0]]?'color:var(--success);border-color:rgba(22,163,74,.4)':'color:var(--text-muted)')+'">'+(ci[p[0]]?'✓ ':'✗ ')+p[1]+'</span>'; }).join('')+'</div>');
+      } else if(detailTab==='partnerships'){
+        body+=field('Ownership / Technology Transfer',n.ownershipTransferOpen?'<span class="badge green">Open to license or transfer technology</span>':'<span class="badge grey">Not open to transfer</span>');
+        var mous=n.mouHistory||[];
+        body+=field('MoU History',mous.length?('<ul style="padding-left:16px">'+mous.map(function(m){return '<li style="font-size:12.5px"><b>'+esc(m.partner||'')+'</b>'+(m.year?' ('+esc(m.year)+')':'')+(m.description?' — '+esc(m.description):'')+'</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">No MoUs recorded.</span>');
+      } else {
+        body+='<div id="innMatches"><div class="empty">Loading best matching funders…</div></div>';
+      }
+      body+='<div class="actions" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)"><button id="innDelBtn" style="margin-left:auto;color:var(--danger);border-color:#f3c2c2">🗑 Delete</button></div>';
+      document.getElementById('detail').innerHTML=head+tabs+body;
+      Array.prototype.forEach.call(document.querySelectorAll('.dtab'),function(b){ b.addEventListener('click',function(){ detailTab=b.getAttribute('data-dtab'); renderInnovatorDetail(n); }); });
+      var db=document.getElementById('innDelBtn'); if(db)db.addEventListener('click',function(){ deleteInnovatorRow(n.id); });
+      if(detailTab==='match')loadInnovatorMatches(n.id);
+     } catch(err){ document.getElementById('detail').innerHTML='<div class="empty">Could not render innovator ('+esc(err.message)+').</div>'; }
+    }
+    function loadInnovatorMatches(id){
+      fetch('/api/match/'+id).then(function(r){return r.json();}).then(function(res){
+        var box=document.getElementById('innMatches'); if(!box)return;
+        var ms=res.matches||[];
+        var cos=ms.filter(function(m){return m.kind==='company';}).slice(0,5);
+        var schs=ms.filter(function(m){return m.kind==='scheme';}).slice(0,5);
+        var html='<div class="matchblock"><div class="why"><div class="k">Best Matching Funders — Companies</div>'+
+          (cos.length?cos.map(matchCard).join(''):'<div class="none">No matching companies yet.</div>')+'</div>'+
+          '<div class="why" style="margin-top:12px"><div class="k">Best Matching Funders — Govt Schemes</div>'+
+          (schs.length?schs.map(matchCard).join(''):'<div class="none">No matching schemes yet.</div>')+'</div></div>';
+        box.innerHTML=html;
+      }).catch(function(){ var box=document.getElementById('innMatches'); if(box)box.innerHTML='<div class="empty">Could not load matches.</div>'; });
+    }
+    function deleteInnovatorRow(id){ var n=innovators.filter(function(x){return x.id===id;})[0]; var nm=n?n.name:'this innovator'; if(!window.confirm('Delete "'+nm+'"? This cannot be undone.'))return;
+      fetch('/api/innovators/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(res){ if(res&&res.success){ showToast('Deleted'); if(selectedId===id){selectedId=null;document.getElementById('detail').innerHTML='<div class="empty">Select an item to see details.</div>';} loadInnovators(); loadStats(); } else showToast('Could not delete'); }).catch(function(){showToast('Request failed');}); }
+
+    function reEnrich(id,btn){ if(btn){btn.disabled=true;btn.textContent='Queuing…';} fetch('/api/companies/'+id+'/enrich',{method:'POST'}).then(function(r){return r.json();}).then(function(res){ if(btn){btn.disabled=false;btn.textContent='↻ Re-enrich now';} if(res&&res.success)openEnrichProgress(id); else showToast('Could not queue'); }).catch(function(){ showToast('Request failed'); if(btn){btn.disabled=false;btn.textContent='↻ Re-enrich now';} }); }
+
+    // ─── Live enrichment progress (polls /enrichment-status every 2s) ────────
+    var enrichPoll={timer:null,id:null};
+    function stopEnrichPoll(){ if(enrichPoll.timer){clearTimeout(enrichPoll.timer);enrichPoll.timer=null;} enrichPoll.id=null; }
+    function closeEnrichModal(){ stopEnrichPoll(); document.getElementById('enrichModal').classList.remove('show'); }
+    function renderEnrichSources(sources){
+      var box=document.getElementById('enrichSources');
+      if(!sources||!sources.length){ box.innerHTML='<div class="csub">No sources fetched yet…</div>'; return; }
+      box.innerHTML=sources.map(function(s){
+        var dom=String(s.url||'').replace(/^https?:\/\/(www\.)?/,'').split('/')[0];
+        return '<div style="font-size:12.5px;margin-bottom:3px">'+(s.success?'<span style="color:var(--success)">✓</span>':'<span style="color:var(--text-muted)">✗</span>')+' '+esc(s.label||'')+' <span class="csub">('+esc(dom)+(s.success?', '+s.chars+' chars':', no usable text')+')</span></div>';
+      }).join('');
+    }
+    function openEnrichProgress(id,onDone){
+      stopEnrichPoll(); enrichPoll.id=id;
+      var name=(companies.filter(function(c){return c.id===id;})[0]||{}).name||'company';
+      document.getElementById('enrichTitle').textContent='Enriching '+name;
+      document.getElementById('enrichStage').textContent='Queued — waiting for the worker…';
+      document.getElementById('enrichSources').innerHTML='';
+      document.getElementById('enrichModal').classList.add('show');
+      var idleTicks=0;
+      function tick(){
+        if(enrichPoll.id!==id)return;
+        fetch('/api/companies/'+id+'/enrichment-status').then(function(r){return r.json();}).then(function(st){
+          if(enrichPoll.id!==id)return;
+          var p=st.progress;
+          if(p){
+            document.getElementById('enrichStage').textContent=p.stage||'Working…';
+            renderEnrichSources(p.sources);
+            if(p.state==='done'||p.state==='failed'){
+              document.getElementById('enrichStage').textContent=(p.state==='done'?'✅ Done — this data was fetched just now ('+fmtDateTime(p.finishedAt)+')':'⚠ '+(p.error||'Failed'));
+              stopEnrichPoll(); loadCompanies(); loadStats(); if(selectedId===id)selectCompany(id); if(onDone)onDone(p.state==='done');
+              return;
+            }
+          } else if(st.queueStatus==='pending'){ document.getElementById('enrichStage').textContent='Queued — waiting for the worker (runs within ~5s)…'; }
+          else if(st.queueStatus==='running'){ document.getElementById('enrichStage').textContent='Starting…'; }
+          else { idleTicks++; if(idleTicks>5){ document.getElementById('enrichStage').textContent='No active run found. Last enriched: '+(st.lastEnrichedAt?fmtDateTime(st.lastEnrichedAt):'never'); stopEnrichPoll(); if(onDone)onDone(false); return; } }
+          enrichPoll.timer=setTimeout(tick,2000);
+        }).catch(function(){ if(enrichPoll.id===id)enrichPoll.timer=setTimeout(tick,2000); });
+      }
+      tick();
+    }
+    document.getElementById('enrichClose').addEventListener('click',closeEnrichModal);
+    document.getElementById('enrichDone').addEventListener('click',closeEnrichModal);
+    document.getElementById('enrichModal').addEventListener('click',function(e){if(e.target===this)closeEnrichModal();});
+
+    // ─── Data Freshness banner + "Re-enrich All" batch (companies & innovators) ─
+    var BATCH={company:{id:null,timer:null,last:null,lastDone:-1},innovator:{id:null,timer:null,last:null,lastDone:-1}};
+    function fmtDur(s){ s=Math.max(0,Math.round(s)); if(s<60)return s+'s'; var m=Math.floor(s/60),r=s%60; if(m<60)return m+'m '+r+'s'; return Math.floor(m/60)+'h '+(m%60)+'m'; }
+    function staleItems(kind){
+      var cut=Date.now()-30*86400000;
+      if(kind==='company')return companies.filter(function(c){ var t=Date.parse(c.enrichedAt||''); return isNaN(t)||t<cut; });
+      return innovators.filter(function(n){ var t=Date.parse(n.researchAt||''); return isNaN(t)||t<cut; });
+    }
+    function batchApi(kind){ return kind==='company'?'/api/companies/reenrich-all':'/api/innovators/reenrich-all'; }
+    function renderFreshBanner(){
+      var el=document.getElementById('freshBanner'); if(!el)return;
+      var kind=activeTab==='companies'?'company':activeTab==='innovators'?'innovator':null;
+      var hb=document.getElementById('reenrichAllHdrBtn');
+      if(hb&&kind){ var running=!!BATCH[kind].id; hb.disabled=running; hb.textContent=running?'↻ Re-enriching…':'↻ Re-enrich All'; }
+      if(!kind){ el.style.display='none'; return; }
+      var b=BATCH[kind];
+      if(b.id&&b.last){ // batch running (or just finished): live progress replaces the banner
+        var st=b.last, doneAll=st.done+st.failed, pct=st.total?Math.round(doneAll*100/st.total):0;
+        var eta=(doneAll<5)?'Estimating…':(st.estimated_seconds_remaining!=null?'~'+fmtDur(st.estimated_seconds_remaining):'—');
+        var cur=st.current_company_name?('Currently: <b>'+esc(st.current_company_name)+'</b>'+(st.current_source?' — '+esc(String(st.current_source).replace(/…$/,''))+'':'')):'Waiting for the worker…';
+        el.innerHTML='<div style="border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:10px;padding:10px 14px;margin-bottom:12px">'+
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px"><b>Re-enriching '+doneAll+' of '+st.total+' '+(kind==='company'?'companies':'innovators')+'</b>'+
+          '<span class="csub">done '+st.done+' · queued '+st.queued+' · failed '+st.failed+'</span></div>'+
+          '<div class="bar" style="margin-bottom:6px"><span style="width:'+pct+'%;background:var(--primary)"></span></div>'+
+          '<div style="font-size:12.5px;margin-bottom:2px">'+cur+'</div>'+
+          '<div class="csub">Elapsed: '+fmtDur(st.elapsed_seconds)+' · Estimated time remaining: '+eta+
+          (st.avg_seconds_per_company!=null?' · avg '+fmtDur(st.avg_seconds_per_company)+'/item':'')+'</div></div>';
+        el.style.display='block';
+        return;
+      }
+      var stale=staleItems(kind);
+      if(!stale.length){ el.style.display='none'; el.innerHTML=''; return; }
+      el.innerHTML='<div style="border:1px solid var(--border);border-left:3px solid var(--warn,#b45309);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+        '<div><b>'+stale.length+'</b> '+(kind==='company'?'companies':'innovators')+' have data older than 30 days (or never enriched)</div>'+
+        '<button class="primary" id="reenrichAllBtn">↻ Re-enrich All'+(kind==='innovator'?' Innovators':'')+'</button></div>';
+      el.style.display='block';
+      var btn=document.getElementById('reenrichAllBtn');
+      if(btn)btn.addEventListener('click',function(){ btn.disabled=true; btn.textContent='Queuing…'; startBatch(kind,true); });
+    }
+    function startBatch(kind,staleOnly){
+      fetch(batchApi(kind)+(staleOnly?'?staleOnly=true':''),{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+        if(!res||!res.batchId){ showToast('Could not start batch'); renderFreshBanner(); return; }
+        try{localStorage.setItem('reenrichBatch_'+kind,res.batchId);}catch(e){}
+        BATCH[kind].id=res.batchId; BATCH[kind].lastDone=-1;
+        BATCH[kind].last={total:res.total,done:0,queued:res.total,failed:0,current_company_name:null,current_source:null,elapsed_seconds:0,estimated_seconds_remaining:null,avg_seconds_per_company:null,state:'running'};
+        renderFreshBanner(); pollBatch(kind);
+      }).catch(function(){ showToast('Request failed'); renderFreshBanner(); });
+    }
+    function pollBatch(kind){
+      var b=BATCH[kind]; if(!b.id)return;
+      fetch(batchApi(kind)+'/'+b.id+'/status').then(function(r){return r.json();}).then(function(st){
+        if(!BATCH[kind].id)return;
+        b.last=st;
+        var doneAll=st.done+st.failed;
+        // Live row refresh: reload the table each time another item completes.
+        if(doneAll!==b.lastDone){ b.lastDone=doneAll; if(kind==='company')loadCompanies(); else loadInnovators(); }
+        renderFreshBanner();
+        if(st.state==='done'){
+          BATCH[kind].id=null; BATCH[kind].timer=null; BATCH[kind].last=null;
+          try{localStorage.removeItem('reenrichBatch_'+kind);}catch(e){}
+          showToast('Re-enriched '+st.done+' of '+st.total+(st.failed?' ('+st.failed+' failed)':'')+' in '+fmtDur(st.elapsed_seconds));
+          if(kind==='company'){loadCompanies();loadStats();}else loadInnovators();
+          return;
+        }
+        b.timer=setTimeout(function(){pollBatch(kind);},2000);
+      }).catch(function(){ if(BATCH[kind].id)BATCH[kind].timer=setTimeout(function(){pollBatch(kind);},2000); });
+    }
+    // Reattach to a batch started in a previous page load — or in another
+    // browser entirely (the server reports its in-flight batches).
+    function tryAttachBatch(kind,id,fromStorage){
+      fetch(batchApi(kind)+'/'+id+'/status').then(function(r){ if(!r.ok)throw 0; return r.json(); }).then(function(st){
+        if(st.state==='running'){
+          BATCH[kind].id=id; BATCH[kind].lastDone=st.done+st.failed; BATCH[kind].last=st;
+          try{localStorage.setItem('reenrichBatch_'+kind,id);}catch(e){}
+          renderFreshBanner(); pollBatch(kind);
+        }else if(fromStorage){ try{localStorage.removeItem('reenrichBatch_'+kind);}catch(e){} }
+      }).catch(function(){ if(fromStorage){ try{localStorage.removeItem('reenrichBatch_'+kind);}catch(e){} } });
+    }
+    function resumeBatches(){
+      var saved={company:null,innovator:null};
+      ['company','innovator'].forEach(function(kind){ try{saved[kind]=localStorage.getItem('reenrichBatch_'+kind);}catch(e){} });
+      fetch('/api/reenrich-all/active').then(function(r){return r.json();}).catch(function(){return {};}).then(function(act){
+        ['company','innovator'].forEach(function(kind){
+          var id=saved[kind]||(act&&act[kind]);
+          if(id)tryAttachBatch(kind,id,!!saved[kind]);
+        });
+      });
+    }
+    resumeBatches();
+    // Permanent header control — works even when nothing is stale (the banner
+    // only appears for stale rows; this button re-enriches EVERYTHING).
+    document.getElementById('reenrichAllHdrBtn').addEventListener('click',function(){
+      var kind=activeTab==='companies'?'company':activeTab==='innovators'?'innovator':null; if(!kind||BATCH[kind].id)return;
+      var n=kind==='company'?companies.length:innovators.length;
+      if(!window.confirm('Re-enrich all '+n+' '+(kind==='company'?'companies':'innovators')+'? Every row re-fetches its sources — this can take a while.'))return;
+      this.disabled=true; this.textContent='↻ Queuing…';
+      startBatch(kind,false);
+    });
+
+    // ─── Insights (server-computed from real DB data via /api/insights) ──────
+    var insightsData=null;
+    function loadInsights(){ return fetch('/api/insights').then(function(r){return r.json();}).then(function(d){ insightsData=d; renderInsights(); }).catch(function(){}); }
+    function renderInsights(){
+      var grid=document.getElementById('insightsGrid'); if(!grid)return;
+      var d=insightsData; if(!d){ grid.innerHTML='<div class="item"><span class="lead">Loading insights…</span></div>'; return; }
+      var items=[];
+      if(d.bestSector)items.push(['Best sector match','<b>'+esc(d.bestSector)+'</b> ('+d.bestSectorCount+' companies)']);
+      if(d.topGeography)items.push(['Top geography','<b>'+esc(d.topGeography)+'</b> ('+d.topGeographyCount+' companies)']);
+      items.push(['Ready to contact','<b>'+d.readyToContact+'</b> companies · <a href="#" id="insReady">View all</a>']);
+      items.push(['Auto-discovered this week','<b>'+d.autoDiscoveredThisWeek+'</b> new companies']);
+      items.push(['Welfare schemes open','<b>'+d.schemesOpen+'</b> for applications']);
+      items.push(['Average match score','<b>'+d.averageMatch+'</b> / 100']);
+      grid.innerHTML=items.map(function(it){return '<div class="item"><span class="lead">'+it[0]+':</span> '+it[1]+'</div>';}).join('');
+      var ir=document.getElementById('insReady'); if(ir)ir.addEventListener('click',function(e){ e.preventDefault(); activeTab='companies'; setTab(); F.status='complete'; renderFilters(); writeURL(); render(); });
+    }
+
+    // ─── Notifications ───────────────────────────────────────────────────────
+    function snapshot(){ var sc={}; companies.forEach(function(c){sc[c.id]=(c.profileMatch&&c.profileMatch.score)||0;}); var st={}; companies.forEach(function(c){st[c.id]=statusGroup(c.status);}); return {count:companies.length,scores:sc,statuses:st,at:Date.now()}; }
+    function loadSnap(){ try{return JSON.parse(localStorage.getItem('csr_snapshot')||'null');}catch(e){return null;} }
+    function saveSnap(){ try{localStorage.setItem('csr_snapshot',JSON.stringify(snapshot()));}catch(e){} }
+    var notifications=[];
+    function computeNotifications(){
+      notifications=[]; var prev=loadSnap(); if(!prev)return;
+      var newN=companies.length-prev.count; if(newN>0)notifications.push({ic:'✦',text:newN+' new companies discovered',sub:'since your last visit'});
+      var moved=0; companies.forEach(function(c){ if(prev.statuses[c.id]&&prev.statuses[c.id]!=='complete'&&statusGroup(c.status)==='complete')moved++; });
+      if(moved>0)notifications.push({ic:'✓',text:moved+' companies moved to Ready status',sub:'now ready to contact'});
+      companies.forEach(function(c){ var was=prev.scores[c.id]; var now=(c.profileMatch&&c.profileMatch.score)||0; if(was!=null&&now>was)notifications.push({ic:'📈',text:esc(c.name)+' profile match improved from '+was+' → '+now,sub:'click to view',id:c.id,kind:'company'}); });
+      // scheme deadlines within 7 days (only if parseable)
+      schemes.forEach(function(s){ var d=Date.parse(s.applicationDeadline); if(!isNaN(d)){ var days=Math.ceil((d-Date.now())/864e5); if(days>=0&&days<=7)notifications.push({ic:'⏰',text:'Welfare scheme deadline in '+days+' days: '+esc(s.name),sub:s.ministry,id:s.id,kind:'scheme'}); } });
+    }
+    function renderNotifications(){
+      computeNotifications();
+      var dot=document.getElementById('bellDot'); dot.textContent=notifications.length; dot.classList.toggle('show',notifications.length>0);
+      var list=document.getElementById('notifList');
+      list.innerHTML=notifications.length?notifications.map(function(n,i){return '<div class="nitem" data-ni="'+i+'"><div class="ic">'+n.ic+'</div><div class="tx">'+n.text+'<div class="sub">'+esc(n.sub||'')+'</div></div></div>';}).join(''):'<div class="nempty">No new updates.</div>';
+      Array.prototype.forEach.call(list.querySelectorAll('.nitem'),function(el){ el.addEventListener('click',function(){ var n=notifications[Number(el.getAttribute('data-ni'))]; if(n&&n.id){ if(n.kind==='scheme'){activeTab='schemes';setTab();render();selectScheme(n.id);} else {activeTab='companies';setTab();render();selectCompany(n.id);} document.getElementById('notifPanel').classList.remove('show'); } }); });
+    }
+    document.getElementById('bellBtn').addEventListener('click',function(e){ e.stopPropagation(); document.getElementById('notifPanel').classList.toggle('show'); });
+    document.getElementById('notifPanel').addEventListener('click',function(e){ e.stopPropagation(); });
+    document.getElementById('notifReadAll').addEventListener('click',function(){ saveSnap(); notifications=[]; renderNotifications(); document.getElementById('notifPanel').classList.remove('show'); showToast('All caught up'); });
+
+    // ─── Tabs ────────────────────────────────────────────────────────────────
+    function setTab(){
+      document.getElementById('tabCompanies').classList.toggle('active',activeTab==='companies');
+      document.getElementById('tabSchemes').classList.toggle('active',activeTab==='schemes');
+      document.getElementById('tabInnovators').classList.toggle('active',activeTab==='innovators');
+      document.getElementById('listTitle').textContent=activeTab==='companies'?'Companies':activeTab==='innovators'?'Innovators':'Welfare Schemes';
+      document.getElementById('st-total-l').textContent=activeTab==='companies'?'Total Companies':activeTab==='innovators'?'Total Innovators':'Total Schemes';
+      document.getElementById('addBtn').style.display=activeTab==='companies'?'':'none';
+      document.getElementById('reenrichAllHdrBtn').style.display=(activeTab==='companies'||activeTab==='innovators')?'':'none';
+      document.getElementById('addInnBtn').style.display=activeTab==='innovators'?'':'none';
+      document.getElementById('importInnBtn').style.display=activeTab==='innovators'?'':'none';
+      document.getElementById('tmplInnBtn').style.display=activeTab==='innovators'?'':'none';
+      document.getElementById('detail').innerHTML='<div class="empty">Select an item to see details.</div>';
+      selectedId=null;
+      renderFilters(); updateBulkBar(); loadStats();
+    }
+    // Sort state is per-table — reset on tab CLICKS only (not in setTab, which
+    // also runs at init after readURL has restored ?sort= from the URL).
+    document.getElementById('tabCompanies').addEventListener('click',function(){ activeTab='companies'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
+    document.getElementById('tabSchemes').addEventListener('click',function(){ activeTab='schemes'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
+    document.getElementById('tabInnovators').addEventListener('click',function(){ activeTab='innovators'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
+
+    // ─── Loaders ─────────────────────────────────────────────────────────────
+    function loadStats(){ fetch('/api/stats').then(function(r){return r.json();}).then(function(s){ var c=s.companyCounts||{}; document.getElementById('st-total').textContent=activeTab==='companies'?(s.totalCompanies!=null?s.totalCompanies:0):activeTab==='innovators'?(s.totalInnovators||0):(s.totalSchemes||0); document.getElementById('st-ready').textContent=c.complete||0; document.getElementById('st-review').textContent=s.pendingReviews||0; document.getElementById('st-verified').textContent=c.verified||0; }).catch(function(){}); }
+    function loadCompanies(){ return fetch('/api/companies').then(function(r){return r.json();}).then(function(list){ companies=Array.isArray(list)?list:[]; render(); renderNotifications(); }).catch(function(){ document.getElementById('rows').innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">Could not load companies.</td></tr>'; }); }
+    function loadSchemes(){ return fetch('/api/schemes').then(function(r){return r.json();}).then(function(list){ schemes=Array.isArray(list)?list:[]; if(activeTab==='schemes')render(); renderInsights(); renderNotifications(); }).catch(function(){}); }
+    function loadInnovators(){ return fetch('/api/innovators').then(function(r){return r.json();}).then(function(list){ innovators=Array.isArray(list)?list:[]; if(activeTab==='innovators')render(); }).catch(function(){ if(activeTab==='innovators')document.getElementById('rows').innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">Could not load innovators.</td></tr>'; }); }
+
+    // ─── Profile ─────────────────────────────────────────────────────────────
+    var profile={technologies:[],target_sectors:[],target_geographies:[],keywords:[]};
+    function renderChecks(gridId,items,sel){ var m={}; (sel||[]).forEach(function(s){m[s]=true;}); document.getElementById(gridId).innerHTML=items.map(function(it){return '<label><input type="checkbox" value="'+esc(it)+'"'+(m[it]?' checked':'')+'>'+esc(it)+'</label>';}).join(''); }
+    function checkedValues(gridId){ return Array.prototype.map.call(document.querySelectorAll('#'+gridId+' input:checked'),function(i){return i.value;}); }
+    function setupTagInput(boxId,initial){ var box=document.getElementById(boxId); var input=box.querySelector('input'); box._tags=(initial||[]).slice();
+      function paint(){ Array.prototype.forEach.call(box.querySelectorAll('.tag'),function(t){t.remove();}); box._tags.forEach(function(tag,i){ var el=document.createElement('span'); el.className='tag'; el.innerHTML=esc(tag)+' <b data-i="'+i+'">×</b>'; box.insertBefore(el,input); }); Array.prototype.forEach.call(box.querySelectorAll('.tag b'),function(b){ b.addEventListener('click',function(){box._tags.splice(Number(b.getAttribute('data-i')),1);paint();}); }); }
+      function add(){ var v=input.value.trim().replace(/,$/,'').trim(); if(v&&box._tags.indexOf(v)===-1)box._tags.push(v); input.value=''; paint(); }
+      input.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===','){e.preventDefault();add();} else if(e.key==='Backspace'&&!input.value&&box._tags.length){box._tags.pop();paint();} });
+      input.addEventListener('blur',add); paint();
+    }
+    function openProfile(){ fetch('/api/match-profile').then(function(r){return r.json();}).then(function(p){ profile=p||profile; renderChecks('sectorGrid',SECTORS,profile.target_sectors); renderChecks('geoGrid',GEOS,profile.target_geographies); setupTagInput('techInput',profile.technologies); setupTagInput('kwInput',profile.keywords); document.getElementById('profileModal').classList.add('show'); }).catch(function(){showToast('Could not load profile');}); }
+    function closeProfile(){ document.getElementById('profileModal').classList.remove('show'); }
+    function saveProfile(){ var body={technologies:document.getElementById('techInput')._tags||[],keywords:document.getElementById('kwInput')._tags||[],target_sectors:checkedValues('sectorGrid'),target_geographies:checkedValues('geoGrid')}; var btn=document.getElementById('profileSave'); btn.disabled=true; btn.textContent='Saving…'; fetch('/api/match-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(res){ btn.disabled=false; btn.textContent='Save Profile'; if(res&&res.success){ profile=res.profile; closeProfile(); showToast('Profile saved — reranked '+(res.reranked||0)+' companies'); loadInsights(); loadCompanies().then(function(){ if(selectedId&&selectedKind==='company')selectCompany(selectedId); }); } else showToast('Could not save profile'); }).catch(function(){ btn.disabled=false; btn.textContent='Save Profile'; showToast('Request failed'); }); }
+    document.getElementById('profileBtn').addEventListener('click',openProfile);
+    document.getElementById('profileClose').addEventListener('click',closeProfile);
+    document.getElementById('profileCancel').addEventListener('click',closeProfile);
+    document.getElementById('profileSave').addEventListener('click',saveProfile);
+    document.getElementById('profileModal').addEventListener('click',function(e){ if(e.target===this)closeProfile(); });
+
+    // ─── Manual CRUD ─────────────────────────────────────────────────────────
+    function openAdd(){ document.getElementById('addName').value=''; var st=document.getElementById('addStatus'); st.style.display='none'; st.textContent=''; document.getElementById('addModal').classList.add('show'); setTimeout(function(){document.getElementById('addName').focus();},50); }
+    function closeAdd(){ document.getElementById('addModal').classList.remove('show'); }
+    function addCompany(){ var name=document.getElementById('addName').value.trim(); if(name.length<2){showToast('Enter a company name');return;} var st=document.getElementById('addStatus'); var btn=document.getElementById('addSave'); btn.disabled=true; btn.textContent='Adding…'; st.style.display='block'; st.textContent='Creating company…';
+      fetch('/api/companies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});}).then(function(res){ btn.disabled=false; btn.textContent='Add & Enrich'; if(!res.ok){st.textContent=(res.j&&res.j.error)||'Could not add';return;} closeAdd(); loadCompanies(); openEnrichProgress(res.j.id,function(){ selectCompany(res.j.id); }); }).catch(function(){ btn.disabled=false; btn.textContent='Add & Enrich'; st.textContent='Request failed'; }); }
+    function deleteCompany(id){ var c=companies.filter(function(x){return x.id===id;})[0]; var nm=c?c.name:'this company'; if(!window.confirm('Delete "'+nm+'"? This cannot be undone.'))return; fetch('/api/companies/'+id,{method:'DELETE'}).then(function(r){return r.json();}).then(function(res){ if(res&&res.success){ showToast('Deleted'); delete selected[id]; if(selectedId===id){selectedId=null;document.getElementById('detail').innerHTML='<div class="empty">Select an item to see details.</div>';} loadCompanies(); loadStats(); } else showToast('Could not delete'); }).catch(function(){showToast('Request failed');}); }
+    function openEdit(c){ document.getElementById('editName').value=c.name||''; document.getElementById('editSpend').value=(typeof c.csrSpendActualCr==='number'&&c.csrSpendActualCr>0)?c.csrSpendActualCr:''; document.getElementById('editScore').value=(typeof c.manualScore==='number')?c.manualScore:''; setupTagInput('editSectors',c.sectorFocus||[]); setupTagInput('editGeos',c.geographyFocus||[]); var m=document.getElementById('editModal'); m._id=c.id; m.classList.add('show'); }
+    function closeEdit(){ document.getElementById('editModal').classList.remove('show'); }
+    function saveEdit(){ var id=document.getElementById('editModal')._id; var body={sectors:document.getElementById('editSectors')._tags||[],geographies:document.getElementById('editGeos')._tags||[]}; var nm=document.getElementById('editName').value.trim(); if(nm)body.name=nm; var sp=document.getElementById('editSpend').value; if(sp!=='')body.spend=Number(sp); var sc=document.getElementById('editScore').value; if(sc!=='')body.score=Number(sc); var btn=document.getElementById('editSave'); btn.disabled=true; btn.textContent='Saving…'; fetch('/api/companies/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});}).then(function(res){ btn.disabled=false; btn.textContent='Save Changes'; if(res.ok&&res.j.success){ closeEdit(); showToast('Saved'); loadCompanies(); selectCompany(id); } else showToast((res.j&&res.j.error)||'Could not save'); }).catch(function(){ btn.disabled=false; btn.textContent='Save Changes'; showToast('Request failed'); }); }
+    document.getElementById('addBtn').addEventListener('click',openAdd);
+    document.getElementById('addClose').addEventListener('click',closeAdd);
+    document.getElementById('addCancel').addEventListener('click',closeAdd);
+    document.getElementById('addSave').addEventListener('click',addCompany);
+    document.getElementById('addModal').addEventListener('click',function(e){if(e.target===this)closeAdd();});
+    document.getElementById('editClose').addEventListener('click',closeEdit);
+    document.getElementById('editCancel').addEventListener('click',closeEdit);
+    document.getElementById('editSave').addEventListener('click',saveEdit);
+    document.getElementById('editModal').addEventListener('click',function(e){if(e.target===this)closeEdit();});
+
+    // ─── Add Innovator ───────────────────────────────────────────────────────
+    function openAddInn(){
+      document.getElementById('innDomain').innerHTML=DOMAINS.map(function(d){return '<option value="'+d[0]+'">'+esc(d[1])+'</option>';}).join('');
+      document.getElementById('innName').value=''; document.getElementById('innTrl').value='';
+      document.getElementById('innEmail').value=''; document.getElementById('innDesc').value='';
+      setupTagInput('innGeo',[]);
+      var st=document.getElementById('innStatus'); st.style.display='none'; st.textContent='';
+      document.getElementById('addInnModal').classList.add('show');
+      setTimeout(function(){document.getElementById('innName').focus();},50);
+    }
+    function closeAddInn(){ document.getElementById('addInnModal').classList.remove('show'); }
+    function addInnovator(){
+      var name=document.getElementById('innName').value.trim();
+      if(name.length<2){showToast('Enter an innovator name');return;}
+      var body={ name:name, type:document.getElementById('innType').value, domain:document.getElementById('innDomain').value, geography:document.getElementById('innGeo')._tags||[] };
+      var trl=document.getElementById('innTrl').value; if(trl!=='')body.trl_current=Number(trl);
+      var em=document.getElementById('innEmail').value.trim(); if(em)body.contact_email=em;
+      var de=document.getElementById('innDesc').value.trim(); if(de)body.description=de;
+      var btn=document.getElementById('addInnSave'); var st=document.getElementById('innStatus');
+      btn.disabled=true; btn.textContent='Adding…'; st.style.display='block'; st.textContent='Creating innovator…';
+      fetch('/api/innovators',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          btn.disabled=false; btn.textContent='Add & Research';
+          if(!res.ok){ st.textContent=(res.j&&res.j.error)||'Could not add'; return; }
+          st.textContent='Added — deep research running in background…';
+          loadInnovators(); loadStats();
+          setTimeout(function(){ closeAddInn(); selectInnovator(res.j.id); },900);
+          // Re-pull once research has had time to land, so the detail fills in.
+          setTimeout(function(){ loadInnovators(); if(selectedId===res.j.id)selectInnovator(res.j.id); },12000);
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent='Add & Research'; st.textContent='Request failed'; });
+    }
+    // ─── Import from Excel / CSV ─────────────────────────────────────────────
+    function showImportResults(res){
+      document.getElementById('importSummary').textContent=res.summary||((res.imported||0)+' imported');
+      var det='';
+      if(res.skipped&&res.skipped.length){
+        det+='<div class="field"><div class="k">Skipped rows</div><ul style="padding-left:16px">'+res.skipped.map(function(s){
+          return '<li style="font-size:12.5px">Row '+esc(s.row)+(s.name?' — '+esc(s.name):'')+': '+esc(s.reason)+'</li>';
+        }).join('')+'</ul></div>';
+      }
+      if(res.duplicates&&res.duplicates.length){
+        det+='<div class="field"><div class="k">Already exists (unchanged)</div>'+chips(res.duplicates)+'</div>';
+      }
+      document.getElementById('importDetails').innerHTML=det||'<span class="hint">All rows imported cleanly.</span>';
+      document.getElementById('importModal').classList.add('show');
+    }
+    function uploadImportFile(file){
+      if(!file)return;
+      if(!/\.(xlsx|csv)$/i.test(file.name)){ showToast('Upload a .xlsx or .csv file'); return; }
+      var btn=document.getElementById('importInnBtn'); btn.disabled=true; btn.textContent='Importing…';
+      fetch('/api/innovators/import?filename='+encodeURIComponent(file.name),{method:'POST',body:file})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          btn.disabled=false; btn.textContent='⬆ Import from Excel';
+          if(!res.ok){ showToast((res.j&&res.j.error)||'Import failed'); return; }
+          showImportResults(res.j);
+          loadInnovators(); loadStats();
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent='⬆ Import from Excel'; showToast('Import request failed'); });
+    }
+    document.getElementById('importInnBtn').addEventListener('click',function(){ document.getElementById('importInnFile').click(); });
+    document.getElementById('importInnFile').addEventListener('change',function(e){ uploadImportFile(e.target.files[0]); e.target.value=''; });
+    document.getElementById('tmplInnBtn').addEventListener('click',function(){ window.location.href='/api/innovators/import-template'; });
+    ['importClose','importDone'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(){ document.getElementById('importModal').classList.remove('show'); }); });
+    document.getElementById('importModal').addEventListener('click',function(e){ if(e.target===this)document.getElementById('importModal').classList.remove('show'); });
+
+    document.getElementById('addInnBtn').addEventListener('click',openAddInn);
+    document.getElementById('addInnClose').addEventListener('click',closeAddInn);
+    document.getElementById('addInnCancel').addEventListener('click',closeAddInn);
+    document.getElementById('addInnSave').addEventListener('click',addInnovator);
+    document.getElementById('addInnModal').addEventListener('click',function(e){if(e.target===this)closeAddInn();});
+
+    document.getElementById('search').addEventListener('input',function(e){ F.q=e.target.value.trim(); writeURL(); renderFilters(); render(); });
+    document.getElementById('csvBtn').addEventListener('click',function(){ window.location.href=activeTab==='companies'?'/api/export/csv':'/api/schemes/export/csv'; });
+
+    // ─── Init ────────────────────────────────────────────────────────────────
+    readURL(); setTab();
+    loadStats(); loadInsights();
+    Promise.all([loadCompanies(),loadSchemes(),loadInnovators()]).then(function(){ render();
+      // Deep link: ?select=<id> opens the detail panel for that row on load.
+      var sel=new URLSearchParams(location.search).get('select');
+      if(sel){ if(activeTab==='innovators')selectInnovator(sel); else if(activeTab==='schemes')selectScheme(sel); else selectCompany(sel); }
+    });
+    setInterval(loadStats,15000);
+    setInterval(loadInsights,20000);
+  </script>
+</body>
+</html>

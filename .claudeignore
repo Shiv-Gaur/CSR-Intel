@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.log
+package-lock.json
+.env
+.env.*
+*.env
+tmp/
+temp/
+.cache/

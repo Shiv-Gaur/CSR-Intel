@@ -1,0 +1,346 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.root{padding:1rem 0}
+.nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem}
+.nb{font-size:12px;padding:4px 12px;border:0.5px solid var(--color-border-secondary);border-radius:20px;background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.nb.on{background:var(--color-background-tertiary);color:var(--color-text-primary);border-color:var(--color-border-primary);font-weight:500}
+.sec{display:none}.sec.on{display:block}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem;margin-bottom:.875rem}
+.ct{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:.5rem}
+.cs{font-size:12px;color:var(--color-text-secondary);margin-bottom:.75rem;line-height:1.6}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;font-weight:500}
+.bi{background:var(--color-background-info);color:var(--color-text-info)}
+.bs{background:var(--color-background-success);color:var(--color-text-success)}
+.bw{background:var(--color-background-warning);color:var(--color-text-warning)}
+.bd{background:var(--color-background-danger);color:var(--color-text-danger)}
+.bg{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.met{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem}
+.ml{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.mv{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.ms{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.step{display:flex;gap:10px;margin-bottom:8px;font-size:13px;align-items:flex-start}
+.snum{width:22px;height:22px;border-radius:50%;background:var(--color-background-secondary);color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:1px}
+.stxt{flex:1;color:var(--color-text-primary);line-height:1.5}
+.ssub{font-size:11px;color:var(--color-text-secondary);margin-top:2px;line-height:1.5}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 10px;border-radius:12px;border:0.5px solid var(--color-border-secondary);margin:2px}
+.tool-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px}
+.tool-row:last-child{border-bottom:none}
+.tool-name{font-weight:500;min-width:140px;color:var(--color-text-primary);font-size:12px}
+.tool-desc{color:var(--color-text-secondary);font-size:12px;flex:1}
+.sprint-row{display:flex;gap:0;margin-bottom:6px}
+.sw{min-width:90px;font-size:12px;color:var(--color-text-secondary);padding-top:3px;flex-shrink:0}
+.sbar{flex:1;display:flex;gap:4px;flex-wrap:wrap}
+.stag{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500}
+.st-blue{background:var(--color-background-info);color:var(--color-text-info)}
+.st-green{background:var(--color-background-success);color:var(--color-text-success)}
+.st-amber{background:var(--color-background-warning);color:var(--color-text-warning)}
+.st-gray{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.prompt-block{font-family:var(--font-mono);font-size:11px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 12px;line-height:1.7;color:var(--color-text-primary);margin-top:8px;white-space:pre-wrap}
+.risk-row{display:flex;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;align-items:flex-start}
+.risk-row:last-child{border-bottom:none}
+.risk-sev{min-width:60px;flex-shrink:0}
+.acct{border-left:3px solid var(--color-border-info);padding-left:12px;margin:8px 0}
+.acct-r{border-left:3px solid var(--color-border-danger);padding-left:12px;margin:8px 0}
+.acct-w{border-left:3px solid var(--color-border-warning);padding-left:12px;margin:8px 0}
+</style>
+
+<div class="root">
+<h2 class="sr-only">Agent-native CSR database automation: pipeline, tools, sprint plan, and prompt design</h2>
+
+<div class="nav" id="nav">
+  <button class="nb on" onclick="show('pipeline')">Agent pipeline</button>
+  <button class="nb" onclick="show('tools')">Tool stack</button>
+  <button class="nb" onclick="show('sprint')">Sprint plan</button>
+  <button class="nb" onclick="show('prompts')">Prompt design</button>
+  <button class="nb" onclick="show('quality')">Quality & limits</button>
+</div>
+
+<!-- PIPELINE -->
+<div class="sec on" id="sec-pipeline">
+  <div class="g3" style="margin-bottom:.875rem">
+    <div class="met"><div class="ml">Revised timeline</div><div class="mv">6–8 wks</div><div class="ms">vs 12 months manual</div></div>
+    <div class="met"><div class="ml">Agent parallelism</div><div class="mv">10–20x</div><div class="ms">concurrent entity workers</div></div>
+    <div class="met"><div class="ml">Human hours/week</div><div class="mv">~4 hrs</div><div class="ms">review + exception handling</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Five-agent system architecture</div>
+    <div class="cs">Each agent is a specialized role. They share a task queue and write to the same Postgres DB. You orchestrate via a coordinator agent that routes work and handles failures.</div>
+
+    <div class="step">
+      <div class="snum" style="background:var(--color-background-info);color:var(--color-text-info)">A1</div>
+      <div class="stxt"><span style="font-weight:500">Discovery agent</span> — finds and seeds entity stubs
+        <div class="ssub">Tools: web_search, fetch_url · Sources: CSR portal company list, NGO Darpan bulk export, MCA CIN database, myScheme API · Output: stub records with name + source URL, queued for enrichment · Rate: ~200 stubs/hour</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="snum" style="background:var(--color-background-success);color:var(--color-text-success)">A2</div>
+      <div class="stxt"><span style="font-weight:500">Enrichment agent</span> — deep-fills each stub
+        <div class="ssub">Tools: fetch_url, pdf_reader, structured_extract · Per entity: fetch annual report, CSR chapter, foundation page, BRSR filing → extract sector focus, geography, grant band, eligibility, registrations · Output: field-complete records with confidence tags · Rate: ~30–50 entities/hour</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="snum" style="background:var(--color-background-warning);color:var(--color-text-warning)">A3</div>
+      <div class="stxt"><span style="font-weight:500">Verification agent</span> — cross-checks and confidence-scores
+        <div class="ssub">Tools: web_search, fetch_url · Takes enriched record → searches for contradicting information → compares against 2 independent sources → flags conflicts → assigns high/medium/low confidence per field · Rate: ~60 entities/hour</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="snum" style="background:var(--color-background-danger);color:var(--color-text-danger)">A4</div>
+      <div class="stxt"><span style="font-weight:500">Drift seeding agent</span> — builds historical baseline
+        <div class="ssub">Tools: fetch_url (Wayback Machine), pdf_reader, web_search (prior year filings) · For each verified entity: fetch last 3–4 years of annual reports → extract sector allocations per FY → compute initial drift vectors · Output: change_history rows + initial drift_scores · Rate: ~15–20 entities/hour (slower, multi-doc)</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="snum" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">A5</div>
+      <div class="stxt"><span style="font-weight:500">Coordinator / exception agent</span> — routes, retries, escalates
+        <div class="ssub">Monitors task queue · Retries failed fetches with alternate sources · Escalates to human review queue when confidence stays low after 3 attempts · Runs daily refresh job for top-50 entities · Generates weekly QA summary report</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Data flow: stub → verified record</div>
+    <div class="step" style="margin-top:4px">
+      <div class="snum">1</div>
+      <div class="stxt">A1 writes stub: <code style="font-size:11px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px">{name, source_url, status: "stub"}</code> to DB</div>
+    </div>
+    <div class="step">
+      <div class="snum">2</div>
+      <div class="stxt">A2 picks up stubs from queue → fetches all source documents → extracts structured fields → writes <code style="font-size:11px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px">status: "enriched"</code></div>
+    </div>
+    <div class="step">
+      <div class="snum">3</div>
+      <div class="stxt">A3 verifies enriched records → resolves conflicts → marks fields with confidence level → writes <code style="font-size:11px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px">status: "verified"</code></div>
+    </div>
+    <div class="step">
+      <div class="snum">4</div>
+      <div class="stxt">A4 seeds historical drift data → writes change_history rows → computes initial drift_scores → marks <code style="font-size:11px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px">status: "complete"</code></div>
+    </div>
+    <div class="step">
+      <div class="snum">5</div>
+      <div class="stxt">Records with any low-confidence fields go to <code style="font-size:11px;background:var(--color-background-secondary);padding:1px 5px;border-radius:4px">human_review_queue</code> — your ~4hrs/week is spent here</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Parallelism strategy</div>
+    <div class="cs">Don't run one agent sequentially through all 200 companies. Run entity-level workers in parallel batches:</div>
+    <div class="step"><div class="snum">→</div><div class="stxt">Discovery runs once to seed all stubs (few hours)</div></div>
+    <div class="step"><div class="snum">→</div><div class="stxt">Enrichment runs 10–20 parallel workers, each handling one entity at a time</div></div>
+    <div class="step"><div class="snum">→</div><div class="stxt">Verification runs immediately after enrichment completes per entity (pipeline, not batch)</div></div>
+    <div class="step"><div class="snum">→</div><div class="stxt">Drift seeding runs for top-50 priority entities first (most data-rich), then expands</div></div>
+    <div class="step"><div class="snum">→</div><div class="stxt">Total wall-clock time for 200 entities: ~3–5 days at 10x parallelism</div></div>
+  </div>
+</div>
+
+<!-- TOOLS -->
+<div class="sec" id="sec-tools">
+  <div class="card">
+    <div class="ct">Tool stack per agent</div>
+    <div class="cs">These are the concrete tool calls each agent makes. Design your agent framework so each tool is a typed, retryable function with structured JSON output.</div>
+    <div class="tool-row"><span class="tool-name">web_search(query)</span><span class="tool-desc">Find company CSR reports, foundation pages, annual reports. Queries: "[Company] CSR report FY2024 filetype:pdf", "[Company] Foundation grant eligibility"</span></div>
+    <div class="tool-row"><span class="tool-name">fetch_url(url)</span><span class="tool-desc">Retrieve full page content. Used for CSR portal profiles, BRSR filings, foundation pages, NGO Darpan records</span></div>
+    <div class="tool-row"><span class="tool-name">fetch_pdf(url)</span><span class="tool-desc">Download + parse annual report PDFs. Navigate to CSR chapter by section heading. Extract tables of Schedule VII spend.</span></div>
+    <div class="tool-row"><span class="tool-name">extract_structured(text, schema)</span><span class="tool-desc">Pass raw document text + target JSON schema → LLM extracts fields with confidence flags. Core enrichment primitive.</span></div>
+    <div class="tool-row"><span class="tool-name">db_write(entity, fields)</span><span class="tool-desc">Upsert record to Postgres. Writes field-level source_url + confidence + extracted_at timestamp alongside value.</span></div>
+    <div class="tool-row"><span class="tool-name">db_read(query)</span><span class="tool-desc">Read current state of an entity for verification comparison and drift calculation</span></div>
+    <div class="tool-row"><span class="tool-name">queue_push(task)</span><span class="tool-desc">Add task to enrichment or review queue. Task types: enrich_entity, verify_entity, seed_drift, human_review</span></div>
+    <div class="tool-row"><span class="tool-name">wayback_fetch(url, year)</span><span class="tool-desc">Fetch archived version of a foundation/company page for a given year. Used by drift seeding agent for historical requirement capture.</span></div>
+    <div class="tool-row"><span class="tool-name">confidence_score(field, sources[])</span><span class="tool-desc">Compare values across multiple source extractions → return agreed value + confidence level. Flags conflicts for human review.</span></div>
+    <div class="tool-row"><span class="tool-name">drift_compute(entity_id)</span><span class="tool-desc">Read change_history rows for entity → compute sector/geo/requirement/openness drift vectors → write drift_scores</span></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Source priority per entity type</div>
+    <div class="tool-row"><span class="tool-name">Large private co.</span><span class="tool-desc">1. CSR annual report PDF → 2. BRSR Schedule VII → 3. Foundation website → 4. CSR portal disclosure</span></div>
+    <div class="tool-row"><span class="tool-name">PSU / bank</span><span class="tool-desc">1. Ministry / DPE CSR data → 2. Annual report → 3. CSR portal → 4. Implementing agency roster</span></div>
+    <div class="tool-row"><span class="tool-name">Corporate foundation</span><span class="tool-desc">1. Foundation website (grants page) → 2. Parent company annual report → 3. 12A/80G filing records → 4. Press releases</span></div>
+    <div class="tool-row"><span class="tool-name">Govt scheme</span><span class="tool-desc">1. myScheme.gov.in → 2. Ministry notification PDF → 3. nodal agency website → 4. PIB press release</span></div>
+    <div class="tool-row"><span class="tool-name">International funder</span><span class="tool-desc">1. Funder portal (Grants page) → 2. India country strategy document → 3. Active RFP listing → 4. Past grantee press releases</span></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Structured extraction schema (per company enrichment call)</div>
+    <div class="prompt-block">{
+  "entity_type": "company",
+  "fields_to_extract": [
+    {"field": "sector_focus", "type": "string[]", "confidence": "?"},
+    {"field": "geography_focus", "type": "string[]", "confidence": "?"},
+    {"field": "csr_spend_cr", "type": "number", "fy": "2023-24", "confidence": "?"},
+    {"field": "implementing_mode", "type": "enum[direct,foundation,ngo_grant]", "confidence": "?"},
+    {"field": "accepts_proposals", "type": "bool", "confidence": "?"},
+    {"field": "required_registrations", "type": "string[]", "confidence": "?"},
+    {"field": "min_track_record_yrs", "type": "number|null", "confidence": "?"},
+    {"field": "application_url", "type": "url|null", "confidence": "?"}
+  ],
+  "source_url": "...",
+  "extracted_at": "ISO8601",
+  "missing_fields": ["list fields not found in source"]
+}</div>
+  </div>
+</div>
+
+<!-- SPRINT -->
+<div class="sec" id="sec-sprint">
+  <div class="card">
+    <div class="ct">Revised 8-week sprint plan (agent-native)</div>
+    <div class="cs">With parallelism and automated enrichment, phases collapse from 12 months to 8 weeks. Human time is reserved for review, exception handling, and prompt refinement.</div>
+
+    <div class="sprint-row"><div class="sw" style="font-weight:500;color:var(--color-text-primary)">Week 1</div><div class="sbar"><span class="stag st-blue">Agent framework setup</span><span class="stag st-blue">DB schema deploy</span><span class="stag st-blue">Tool wiring</span><span class="stag st-gray">Test on 5 companies</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 2</div><div class="sbar"><span class="stag st-blue">Discovery agent → seed 200+ company stubs</span><span class="stag st-blue">Priority list set (top 100)</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 3</div><div class="sbar"><span class="stag st-green">Enrichment: top 50 companies</span><span class="stag st-green">Verification running parallel</span><span class="stag st-gray">Human review: exceptions</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 4</div><div class="sbar"><span class="stag st-green">Enrichment: companies 51–150</span><span class="stag st-green">Govt schemes + myScheme batch</span><span class="stag st-amber">Drift seed: top 25 companies</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 5</div><div class="sbar"><span class="stag st-green">Enrichment: intl funders (top 30)</span><span class="stag st-amber">Drift seed: companies 26–100</span><span class="stag st-gray">QA pass on completed records</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 6</div><div class="sbar"><span class="stag st-amber">FDIE drift scores computed</span><span class="stag st-amber">Sector / geo / req vectors live</span><span class="stag st-green">NGO Darpan sample (200 NGOs)</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 7</div><div class="sbar"><span class="stag st-green">Matching model v1 running</span><span class="stag st-amber">Alert engine wired</span><span class="stag st-gray">End-to-end test with sample NGO</span></div></div>
+    <div class="sprint-row"><div class="sw">Week 8</div><div class="sbar"><span class="stag st-gray">Full QA + human review completion</span><span class="stag st-gray">Refresh scheduler live</span><span class="stag st-gray">MVP launch-ready</span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Daily refresh cadence (post-launch)</div>
+    <div class="step"><div class="snum">D</div><div class="stxt"><span style="font-weight:500">Daily</span> — A1 runs targeted searches for new CSR disclosures, scheme notifications, funder announcements. Top-50 entities checked for page changes via hash diff.</div></div>
+    <div class="step"><div class="snum">W</div><div class="stxt"><span style="font-weight:500">Weekly</span> — A2/A3 re-enrich any entity whose source page has changed. Drift scores recomputed for updated entities. Human review queue processed.</div></div>
+    <div class="step"><div class="snum">Q</div><div class="stxt"><span style="font-weight:500">Quarterly</span> — Full re-enrichment pass on all entities. Annual report season (Oct–Jan) triggers prioritized PDF batch. New company stubs discovered and seeded.</div></div>
+    <div class="step"><div class="snum">Y</div><div class="stxt"><span style="font-weight:500">Annual</span> — Drift vectors updated with new FY data. Historical snapshots archived. Matching model weights recalibrated against any ground-truth feedback collected.</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Prioritization: what to ingest first</div>
+    <div class="cs">Not all 200+ entities are equal. Score each by: (a) CSR obligation size, (b) openness to third-party NGOs, (c) data richness of available sources. Ingest high-priority first.</div>
+    <div class="step"><div class="snum" style="background:var(--color-background-danger);color:var(--color-text-danger)">P1</div><div class="stxt">Top 50 by CSR spend + known to engage NGOs: Tata, Mahindra, HUL, HDFC Bank, Kotak, Bajaj, Cipla, L&T, Wipro, TCS<div class="ssub">Target: 100% field completeness, 3-year drift history</div></div></div>
+    <div class="step"><div class="snum" style="background:var(--color-background-warning);color:var(--color-text-warning)">P2</div><div class="stxt">PSUs + major banks (SBI, ONGC, NTPC, BHEL, PNB) — large obligors, mostly direct implementation<div class="ssub">Target: spend data + sector focus + any NGO-facing programs identified</div></div></div>
+    <div class="step"><div class="snum" style="background:var(--color-background-info);color:var(--color-text-info)">P3</div><div class="stxt">International funders: USAID, Ford Foundation, Bill & Melinda Gates, Omidyar, Skoll, MacArthur India<div class="ssub">Target: active programs, eligibility, geography, FCRA requirement noted</div></div></div>
+    <div class="step"><div class="snum">P4</div><div class="stxt">Government schemes (myScheme batch), Indian foundations, university research grants, corporate foundations of mid-size companies</div></div>
+  </div>
+</div>
+
+<!-- PROMPTS -->
+<div class="sec" id="sec-prompts">
+  <div class="card">
+    <div class="ct">Enrichment agent system prompt (core template)</div>
+    <div class="prompt-block">You are a CSR intelligence extraction agent. You will be given a company name, its CSR annual report or foundation page content, and a structured extraction schema. Your job is to extract fields accurately and conservatively.
+
+Rules:
+- Extract only what is explicitly stated. Do not infer or guess.
+- If a field is not found in the source, set it to null and flag it in missing_fields.
+- For sector_focus: use canonical taxonomy [Education, Health, Environment, Livelihoods, Women Empowerment, Rural Development, Skilling, Nutrition, Water & Sanitation, Arts & Culture, Sports, Digital Inclusion, Disaster Relief].
+- For geography_focus: use state names. If pan-India is stated, include "Pan-India" as a value.
+- For accepts_proposals: only mark true if source explicitly invites NGO proposals. Default to false if ambiguous.
+- For confidence: "high" = field explicitly stated with a number or named value. "medium" = implied or described qualitatively. "low" = inferred from context.
+- Always include the source_url and page/section you extracted from.
+- Return ONLY valid JSON matching the schema. No preamble.</div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Verification agent prompt design</div>
+    <div class="prompt-block">You are a CSR data verification agent. You will receive:
+1. An enriched company record (JSON) extracted from Source A
+2. A second source document for the same company (Source B)
+
+Your job:
+- Compare each field between the record and Source B
+- For each field: mark as CONFIRMED (sources agree), CONFLICT (sources disagree — state both values), or UNVERIFIED (field not found in Source B)
+- Upgrade confidence to "high" if both sources agree on an explicit value
+- Downgrade to "low" and flag for human review if sources materially conflict
+- Note: minor wording differences are not conflicts. Material conflicts are: different states listed, different spend amounts (&gt;10% variance), contradictory proposal acceptance status.
+Return: updated record JSON + conflict_log[] + human_review_required (bool)</div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Drift seeding agent prompt design</div>
+    <div class="prompt-block">You are a CSR drift analysis agent. You will be given annual report CSR chapter excerpts for a single company across multiple financial years (e.g., FY2020, FY2021, FY2022, FY2023, FY2024).
+
+For each year, extract:
+- sector_allocations: {sector_name: spend_cr or spend_pct} — use best available (absolute or relative)
+- geography_focus: state list
+- accepts_proposals: bool
+- key_requirement_changes: any new or dropped eligibility requirements stated
+
+Then compute:
+- sector_drift_signal: which sectors grew, shrunk, or disappeared across years
+- geo_drift_signal: which states were added or removed
+- openness_drift_signal: any change in proposal acceptance posture
+
+Output one change_history record per year per changed field, plus a drift_summary object.
+Flag any year where source data was unavailable or ambiguous.</div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Exception handling: what to do when sources fail</div>
+    <div class="step"><div class="snum">1</div><div class="stxt">Annual report PDF not publicly available → try company investor relations page → try BSE/NSE filing portal → flag as "source_unavailable"</div></div>
+    <div class="step"><div class="snum">2</div><div class="stxt">Foundation page has no eligibility information → search for past grant announcements → search for CSR committee minutes → mark fields as low confidence</div></div>
+    <div class="step"><div class="snum">3</div><div class="stxt">Conflicting sector focus across sources → do not pick one — store both in conflict_log → route to human review → human makes final call with source citation</div></div>
+    <div class="step"><div class="snum">4</div><div class="stxt">Company not on CSR portal → check if obligation threshold met (net profit &gt; ₹5Cr) → if yes, mark as "disclosure_missing" — flag for regulatory non-compliance note</div></div>
+  </div>
+</div>
+
+<!-- QUALITY -->
+<div class="sec" id="sec-quality">
+  <div class="card">
+    <div class="ct">Known agent failure modes — and mitigations</div>
+
+    <div class="acct-r">
+      <div style="font-size:13px;font-weight:500;margin-bottom:3px">Hallucination of missing fields</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">Agent invents a plausible but false sector focus or grant amount when source is ambiguous. Mitigation: prompt explicitly bans inference. Verification agent catches this by checking Source B. Confidence scoring exposes low-reliability fields.</div>
+    </div>
+
+    <div class="acct-r">
+      <div style="font-size:13px;font-weight:500;margin-bottom:3px">PDF extraction errors</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">Table data in PDFs often misaligns, especially multi-column Schedule VII tables. Mitigation: validate extracted spend figures against CSR portal totals. Flag if variance &gt;10%. Route to human for manual table check.</div>
+    </div>
+
+    <div class="acct-w">
+      <div style="font-size:13px;font-weight:500;margin-bottom:3px">Stale source pages</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">Foundation websites often not updated for months after a policy change. Mitigation: always prefer dated documents (annual reports) over undated web pages. Store page hash + fetch date to detect staleness.</div>
+    </div>
+
+    <div class="acct-w">
+      <div style="font-size:13px;font-weight:500;margin-bottom:3px">Entity resolution errors</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">"Tata Consultancy Services" vs "TCS Foundation" vs "Tata Trusts" are distinct entities that share parent branding. Mitigation: use CIN from MCA as canonical ID. Never merge entities without explicit human confirmation.</div>
+    </div>
+
+    <div class="acct">
+      <div style="font-size:13px;font-weight:500;margin-bottom:3px">Rate limiting / access blocks</div>
+      <div style="font-size:12px;color:var(--color-text-secondary)">CSR portal and some foundation pages may throttle automated fetches. Mitigation: add delays between fetches, randomize user agents, queue retries with exponential backoff. Keep a whitelist of known-blocked URLs for manual download.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct">Human review queue: what triggers it</div>
+    <div class="tool-row"><span class="tool-name">Confidence trigger</span><span class="tool-desc">Any entity with &gt;3 fields marked low confidence after verification pass → human reviews source docs manually</span></div>
+    <div class="tool-row"><span class="tool-name">Conflict trigger</span><span class="tool-desc">Sources disagree on accepts_proposals, sector_focus (different sets), or spend (&gt;10% variance) → human adjudicates</span></div>
+    <div class="tool-row"><span class="tool-name">Missing source trigger</span><span class="tool-desc">No annual report or foundation page found → human locates source or marks entity as "insufficient data"</span></div>
+    <div class="tool-row"><span class="tool-name">Drift anomaly trigger</span><span class="tool-desc">Drift score &gt;80 on any dimension in a single year → possible data error vs genuine shift → human validates before alert fires</span></div>
+    <div class="tool-row"><span class="tool-name">New entity trigger</span><span class="tool-desc">First-time ingestion of any P1/P2 priority entity → human spot-checks before record goes live</span></div>
+  </div>
+
+  <div class="card">
+    <div class="ct">QA metrics to track weekly</div>
+    <div class="g2">
+      <div class="met"><div class="ml">Field completeness</div><div class="mv">&gt;85%</div><div class="ms">target for P1 entities</div></div>
+      <div class="met"><div class="ml">High-confidence fields</div><div class="mv">&gt;70%</div><div class="ms">across verified records</div></div>
+      <div class="met"><div class="ml">Human review rate</div><div class="mv">&lt;15%</div><div class="ms">of entities needing review</div></div>
+      <div class="met"><div class="ml">Source coverage</div><div class="mv">2+ sources</div><div class="ms">per P1/P2 entity</div></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+  document.getElementById('sec-'+id).classList.add('on');
+  event.target.classList.add('on');
+}
+</script>
