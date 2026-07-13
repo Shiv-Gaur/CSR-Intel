@@ -25,12 +25,15 @@
        text, so it sits directly on this dark surface; all header controls are
        restyled for contrast against it. */
     header.topbar { background: #1e293b; border-bottom: 1px solid #0f172a; }
-    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; }
     .brand { display: flex; align-items: center; gap: 16px; }
     .brand h1 { font-size: 17px; font-weight: 650; color: #f1f5f9; }
     .brand p { font-size: 12px; color: #94a3b8; }
+    /* logo.png is pre-cropped to its artwork (1024x300 — the original 1024x360
+       carried ~30% empty vertical margin, which made any rendered size look
+       small). No max-* caps and no overflow on any ancestor — height rules. */
     .logochip { display: inline-flex; align-items: center; }
-    .logochip img { height: 50px; width: auto; display: block; border-radius: 6px; }
+    .logochip img { height: 80px; width: auto; max-width: none; max-height: none; display: block; border-radius: 6px; }
     .topbar button { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.28); color: #e2e8f0; }
     .topbar button:hover { background: rgba(255,255,255,.14); }
     .topbar button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
