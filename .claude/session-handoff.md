@@ -1,74 +1,63 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-12)
+# Session Handoff — CSR Funding Intelligence (2026-07-13)
 
 ## 1. Goal
-(a) Run the "Re-enrich All" batch for real on all 173 companies; (b) fix 4 bugs
-(status regression, wrong/fake exec contacts, delete-icon tooltip overlap, missing
-Re-enrich All button) + sticky detail panel; (c) restructure the repo and push to
-GitHub. All done. Gates: build ✅, 133/133 tests ✅, live browser-verified ✅.
+Phases 1-3 of the platform rework: (1) PostgreSQL → SQLite, (2) Electron desktop
+shell, (3) Puppeteer JS-render fallback. All DONE, verified, pushed to
+https://github.com/Shiv-Gaur/CSR-Intel (main). Gates: build ✅, 146/146 tests ✅.
 
-## 2. Completed (exact paths — post-restructure)
-- **Batch run**: 173/173 done, 0 failed, 2h44m (avg 57s/company). All rows have
-  same-day enriched_at + sources + domain_focus; 118 key_contacts, 34 mou_history.
-- **`src/agents/enrichment.agent.ts`** — no longer downgrades verified/complete
-  unless needsHumanReview fails; official-site contact step 4.2b added.
-- **`src/agents/verification.agent.ts`** — never pulls complete→verified except on
-  genuine conflicts. Verified live: 13 re-enrichments, zero regressions.
-- **`src/tools/official-site.ts`** — NEW `fetchCompanyOfficialContacts(domain)`:
-  sitemap.xml → homepage links → path guesses (max 4 pages); contacts ONLY.
-- **`src/utils/extractor.ts`** — contact tiers (own site > BSE/NSE/Zauba > rest),
-  UNVERIFIED_CONTACT_NOTE on unconfirmed aggregator names, namesConsistent()
-  subset matching, NAME_STOPWORDS +org/chrome/verb words, mid-string-honorific
-  reject, leading-honorific strip.
-- **`scripts/dev-tools/purge-unconfirmed-wiki-contacts.ts`** — RUN: 204 contacts
-  purged across 101 companies.
-- **`src/dashboard/dashboard.html`** — SVG trash icon (no title attr — native
-  tooltip was BUG 3), header ↻ Re-enrich All btn (all-rows, confirm dialog),
-  sticky `.panel.side`, click-again deselect, ⚠ unverified label on contacts.
-- **`src/dashboard/dashboard.ts`** — GET /api/reenrich-all/active (cross-browser
-  batch reattach); moved from src/ root, dynamic imports fixed.
-- **Restructure**: dashboard→src/dashboard/, logger→src/utils/logger-core.ts,
-  4 scripts→scripts/dev-tools/, PROJECT_REQUIREMENTS.md+2 design HTMLs→docs/,
-  deleted claude.ts.disabled + 10 scripts/test-*.js + test:search script + 7
-  unused imports (LLM-era schema consts). README.md + .gitignore NEW.
-- **Tests**: +10 in reenrich-batch.test.ts (new) + executive-contacts.test.ts.
-- **Git**: repo initialized, pushed to https://github.com/Shiv-Gaur/CSR-Intel
-  (main, 78 files, merge over GitHub's stub initial commit, .env excluded).
+## 2. Completed (exact paths)
+- **PHASE 1**: src/db/sqlite.ts (better-sqlite3, WAL, ./data/csr-intel.db,
+  SQLITE_PATH override; pg-shaped query() facade; central JSON (de)serialise);
+  src/db/index.ts rewritten; every query converted (json_patch/json_extract/
+  json_each; datetime modifiers; aliased COUNT(*)). Data migrated via
+  scripts/migrate-postgres-to-sqlite.ts — entities 189 (173 companies + 16
+  schemes), innovators 5, task_queue 2076, change_history 74, human_review 260,
+  match_profile 1 — ALL COUNTS MATCHED. pg removed. Postgres docker untouched
+  as backup. data/ gitignored.
+- **PHASE 2**: electron/main.ts (server as `node dist/index.js` CHILD — no
+  better-sqlite3 ABI rebuild; child kill stops server+workers+cron; single-
+  instance lock; attach mode if port 3000 already served); electron/preload.cjs
+  (sandbox needs CJS); electron/icon.ico (DRIIV seal via png-to-ico);
+  packaged mode: SQLITE_PATH → app.getPath('userData'). Scripts: electron:dev/
+  electron:start/electron:build (tsconfig.electron.json → dist-electron/).
+- **PHASE 3**: src/tools/browser-fetcher.ts (shared headless Chromium, queue
+  concurrency 2, resource blocking, 8s nav/15s protocol/20s hard cap, 45s idle
+  close, exit hooks); fallback wiring in src/tools/free-sources.ts (<200 chars,
+  skip bse/nse JSON APIs) + src/tools/official-site.ts. Extractor hardening for
+  rendered-page noise (NAME_STOPWORDS additions + mid-word-capital DOM-seam
+  check in src/utils/extractor.ts).
+- Earlier same day: contact integrity (LinkedIn ban, nw18 boilerplate purge,
+  PSU board pages, manual overrides), DRIIV logo header (dark bar, cropped
+  1024x300 asset at src/dashboard/assets/logo.png, GET /assets/logo.png).
 
 ## 3. Decisions
-- Enrichment preserves earned status; only needsHumanReview (score<30, no
-  sectors/geos) justifies downgrade. Verification conflict branch still demotes.
-- Aggregator (wiki/linkedin/nasscom/…) names: dropped only when contradicting a
-  tier-1/2 name for the same title (namesConsistent guards noisy supersets);
-  otherwise kept + labelled "Unverified — not confirmed on company's own site".
-- No domain guessing: official-site runs only for the ~29 companies with a
-  curated `website` in src/tools/known-urls.ts. "Infosys" entity ≠ "Infosys
-  Foundation" seed (exact match) — so Infosys gets no tier-1 pages.
-- docs/PROJECT_REQUIREMENTS.md is the tracker's NEW path (user-confirmed move);
-  memory + MEMORY.md updated to match.
-- Old interrupted batch's 120 pending enrich tasks were cancelled as
-  failed/'superseded' 2026-07-12 — those failed counts in task_queue are expected.
+- Server ALWAYS a child process under Electron (ABI + lifecycle); Chromium dies
+  with the child — verified: quit mid-enrichment with 10 live chrome.exe → zero
+  orphans, port free.
+- Browser fallback is threshold-gated (fires only on <200-char fetches), never
+  a replacement; hdfcbank.com forced the 20s hard cap (protocol stalls at 146s).
+- 10-company fallback run: 10/10 companies triggered it (~4-5 fetches each,
+  mean 3.8s/fetch); ~96s/company vs 57s cheerio-only (~4.6h vs 2.7h for 173).
+- Tier-1 pages can still name SUBSIDIARY heads (BoB "Samir Bhupendra Shah") —
+  not machine-verifiable; the per-contact "Report incorrect" override is the fix.
+- SBI/ONGC sites resist even the browser (404 conventional paths, /web/ URL
+  scheme, bot walls) — their contacts stay wikipedia+Unverified, honestly.
 
 ## 4. In progress
-Nothing half-done. Dev server running on http://localhost:3000 (bg task bzff6bpuo,
-current restructured code). Working tree clean, pushed. 4 pending human reviews +
-~32 stale seed_drift:running claims pre-existing, untouched.
+Nothing half-done. Port 3000 free (Electron quit test was last). DB is SQLite
+at ./data/csr-intel.db — docker csr-postgres is a STALE backup as of 2026-07-13.
 
 ## 5. Next steps (suggested first prompts)
-1. "Build financial data extraction (revenue, net profit, CSR budget) for manually
-   added companies" — the LAST open tracker item (docs/PROJECT_REQUIREMENTS.md);
-   `estimateSpendFromProfit` in src/utils/inference.ts is the seed.
-2. "Add official websites for the remaining ~144 companies to known-urls.ts (or
-   fuzzy-match seeds like Infosys→Infosys Foundation)" — widens tier-1 contact
-   coverage beyond 29 companies.
-3. "Rebuild the csr-app Docker image (docker compose build app) + drop obsolete
-   version: key" — carried over since 2026-07-06; Dockerfile html-copy path was
-   already updated for src/dashboard/.
+1. "Package the Electron app with electron-builder (installer, bundled DB
+   snapshot, icon)" — natural PHASE 4; main.ts already handles userData DB.
+2. "Build financial data extraction (revenue, net profit, CSR budget)" — the
+   last old tracker item; estimateSpendFromProfit in src/utils/inference.ts.
+3. "Add official websites for remaining ~140 companies to known-urls.ts" —
+   widens tier-1 contact coverage (only ~31 have domains).
 
 ## 6. Blockers (need human input)
-- Web search still disabled (search-free mode); Crunchbase/LinkedIn/NSE/Zauba may
-  bot-block (fail soft). Cipla's own site returned 0 usable pages when probed.
-- DB = docker `csr-postgres` @ localhost:5432/csr_intel (postgres/postgres);
-  native PG18 on 5433 is NOT it. Docker Desktop needs manual start after reboot.
-- No hot reload: restart `npm run dev` after src edits; kill orphaned node on
-  port 3000 first (Get-NetTCPConnection -LocalPort 3000).
-- git push auth worked this session (existing credentials); no token setup needed.
+- Search-free mode still on; SBI/HDFC-class bot walls beat even Puppeteer.
+- Docker Postgres only needed if re-running the one-time migration (needs
+  `npm i pg` again).
+- No hot reload: restart `npm run dev` after src edits; kill port-3000 process
+  first (Get-NetTCPConnection -LocalPort 3000).

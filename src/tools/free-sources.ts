@@ -13,6 +13,7 @@
  */
 import axios from 'axios';
 import { fetchAuto } from './fetcher.js';
+import { fetchWithBrowser } from './browser-fetcher.js';
 import { logger } from '../utils/logger.js';
 import type { FetchResult } from '../types/index.js';
 
@@ -38,6 +39,12 @@ export interface SourceFetchResult {
 
 /** Minimum usable text length from a single source (filters error/redirect pages). */
 const MIN_SOURCE_CHARS = 100;
+
+/** Below this many chars, a cheerio fetch of an HTML page is treated as a
+ *  JS-rendered shell and retried in headless Chromium (browser-fetcher.ts). */
+const BROWSER_FALLBACK_THRESHOLD = 200;
+/** Sources where a browser retry is pointless: JSON APIs, not HTML pages. */
+const BROWSER_FALLBACK_SKIP = new Set(['bse-announcements', 'nse-announcements']);
 
 /**
  * Build candidate source URLs for an entity from free, keyless providers.
@@ -236,7 +243,25 @@ export async function gatherSourceText(
     seen.add(c.url);
 
     onProgress?.({ phase: 'fetching', label: c.label, url: c.url });
-    const r = await c.run();
+    let r = await c.run();
+    let method = 'cheerio';
+
+    // PHASE 3 fallback: a near-empty response from an HTML page is the
+    // signature of a JS-rendered shell — retry that URL in headless Chromium.
+    // API-style sources are skipped (they return JSON, a browser won't help).
+    if (r.content.trim().length < BROWSER_FALLBACK_THRESHOLD && !BROWSER_FALLBACK_SKIP.has(c.label)) {
+      const b = await fetchWithBrowser(c.url);
+      if (b.success && b.content.trim().length > r.content.trim().length) {
+        r = { ...r, url: b.url, content: b.content, success: true };
+        method = 'browser';
+      }
+      logger.info('Fetch method outcome', {
+        label: c.label, url: c.url, method,
+        cheerioChars: method === 'browser' ? undefined : r.content.length,
+        browserChars: b.content.length,
+      });
+    }
+
     const usable = r.success && r.content.trim().length >= MIN_SOURCE_CHARS;
     perSource.push({ label: c.label, url: r.url || c.url, chars: r.content.length, success: usable, text: usable ? r.content : '' });
     onProgress?.({ phase: 'fetched', label: c.label, url: r.url || c.url, success: usable, chars: r.content.length });

@@ -341,7 +341,7 @@ const HONORIFIC_SRC = String.raw`(?:Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Shri|Smt\.?)\s+`;
 
 // Words that mean a "name" capture is actually organisation/report/region
 // boilerplate ("Central Europe", "Tenure F. C. Kohli" from Wikipedia infoboxes).
-const NAME_STOPWORDS = /\b(?:limited|ltd|india|company|corporate|social|responsibility|foundation|officer|director|directors|committee|board|report|annual|policy|bank|group|private|the|tenure|central|europe|asia|africa|america|global|digital|services|solutions|technologies|region|international|speaks|says|announces|launches|welcomes|presents|celebrates|discusses|unveils|highlights|joins|visits|view|profile|profiles|message|read|more|know|non|executive|independent|whole|designate|chairman|chairperson|chairwoman|president|founder|finance|logistics|insurance|capital|motors|holidays|resorts|energy|power|steel|cement|pharma|chemicals|aviation|airlines|telecom|retail|realty|infrastructure|ventures|enterprises|industries|hotels|tractors|agri)\b/i;
+const NAME_STOPWORDS = /\b(?:limited|ltd|india|company|corporate|social|responsibility|foundation|officer|director|directors|committee|board|report|annual|policy|bank|group|private|the|tenure|central|europe|asia|africa|america|global|digital|services|solutions|technologies|region|international|speaks|says|announces|launches|welcomes|presents|celebrates|discusses|unveils|highlights|joins|visits|view|profile|profiles|message|read|more|know|non|executive|independent|whole|designate|chairman|chairperson|chairwoman|president|founder|contact|incorporated|corporation|disclosure|investors?|operations|mauritius|finance|logistics|insurance|capital|motors|holidays|resorts|energy|power|steel|cement|pharma|chemicals|aviation|airlines|telecom|retail|realty|infrastructure|ventures|enterprises|industries|hotels|tractors|agri)\b/i;
 
 const HONORIFIC_WORD = /^(?:mr|mrs|ms|dr|shri|smt)\.?$/i;
 
@@ -355,6 +355,9 @@ function isPlausibleName(name: string): boolean {
   // Every word must be capitalised — combined regexes run with the 'i' flag when
   // the title pattern needs it, so the name shape must be re-checked here.
   if (!words.every(w => /^[A-Z]/.test(w))) return false;
+  // Rendered pages glue adjacent DOM nodes together ("Head OfficePlot No.") —
+  // a mid-word capital is a text-extraction seam, not a name (Mc/Mac excepted).
+  if (words.some(w => /[a-z][A-Z]/.test(w) && !/^Ma?c[A-Z]/.test(w))) return false;
   if (NAME_STOPWORDS.test(name)) return false;
   return true;
 }

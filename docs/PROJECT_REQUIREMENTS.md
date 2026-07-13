@@ -177,3 +177,18 @@
       Scripts: electron:dev / electron:start / electron:build. Verified live:
       native window, 173 companies, add+delete round-trip, graceful quit left
       0 electron / 0 node processes and port 3000 free.
+- [x] PHASE 3: Puppeteer JS-render fallback — DONE 2026-07-13. puppeteer 25.3,
+      src/tools/browser-fetcher.ts: ONE shared headless Chromium (lazy launch,
+      45s idle self-close, exit hooks), p-queue concurrency 2, images/fonts/css
+      blocked, 8s nav + 15s protocol + 20s hard cap per fetch (the hard cap was
+      forced by hdfcbank.com's bot-wall holding pages in navigation limbo —
+      146s/fetch before the fix). Fallback-only wiring: gatherSourceText +
+      official-site retry a URL in Chromium when plain fetch < 200 chars
+      (JSON-API sources skipped); method logged per fetch. 10-company run:
+      10/10 triggered ≥1 fallback (44 fetches, 37 beat cheerio, mean 3.8s);
+      ~96s/company vs ~57s cheerio-only. Wins: Cipla investor.relations@ from
+      own site (previously 0 usable official pages), BHEL companysecretary@
+      via now-readable Zauba. Noise from rendered pages killed: org suffixes,
+      nav words, DOM-seam glue (mid-word capital check, Mc/Mac excepted).
+      Electron verified: quit mid-enrichment with 10 live Chromium processes →
+      0 electron / 0 node / 0 chromium left, port free.

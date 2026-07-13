@@ -18,6 +18,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { fetchHTML } from './fetcher.js';
+import { fetchWithBrowser } from './browser-fetcher.js';
 import { logger } from '../utils/logger.js';
 
 /** URL-path keywords that mark a page as contact/leadership-relevant. */
@@ -130,7 +131,13 @@ export async function fetchCompanyOfficialContacts(domain: string, opts?: { thor
   if (homepageHtml) {
     const $ = cheerio.load(homepageHtml);
     $('script, style, iframe, noscript').remove();
-    const text = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 15000);
+    let text = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 15000);
+    if (text.length < 200) {
+      // JS-shell homepage — render it for the text (link discovery below still
+      // uses the raw HTML, which usually carries nav hrefs even in shells).
+      const b = await fetchWithBrowser(root);
+      if (b.success && b.content.length > text.length) text = b.content;
+    }
     if (text.length >= MIN_PAGE_CHARS) pages.push({ url: root, text });
   }
 
@@ -157,7 +164,21 @@ export async function fetchCompanyOfficialContacts(domain: string, opts?: { thor
 
   for (const url of candidates) {
     const r = await fetchHTML(url); // fails soft; guessed-path 404s are expected
-    if (r.success && r.content.length >= MIN_PAGE_CHARS) pages.push({ url, text: r.content });
+    if (r.success && r.content.length >= MIN_PAGE_CHARS) {
+      pages.push({ url, text: r.content });
+      continue;
+    }
+    // PHASE 3: leadership/IR pages are exactly where SPAs hide content behind
+    // JS. When the plain fetch got a shell (or nothing at all but the server
+    // answered — a 404 page stays a 404 in a browser too, so only retry when
+    // the fetch SUCCEEDED but came back thin), render it in headless Chromium.
+    if (r.success && r.content.length < 200) {
+      const b = await fetchWithBrowser(url);
+      if (b.success && b.content.length >= MIN_PAGE_CHARS) {
+        pages.push({ url, text: b.content });
+        logger.info('Official-site page needed browser rendering', { url, cheerioChars: r.content.length, browserChars: b.content.length });
+      }
+    }
   }
 
   logger.info('Official-site contact pages fetched', {

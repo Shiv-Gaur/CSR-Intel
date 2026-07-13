@@ -395,3 +395,23 @@ describe('real BHEL board page layout', () => {
     expect(cmd!.name).toBe('K. Sadashiv Murthy');
   });
 });
+
+describe('browser-rendered page noise', () => {
+  it('rejects org suffixes and page-form fragments as names', () => {
+    const r = extractExecutiveContacts('Y.K. Hamied Incorporated, Chairman. Idiopathic Pulmonary Fibrosis Contact, CEO form below.', 'official-site', 'Cipla');
+    expect(r.filter(c => c.name)).toHaveLength(0);
+  });
+});
+
+describe('rendered-page noise: nav words and DOM-seam glue', () => {
+  it('rejects page-navigation fragments and glued DOM text as names', () => {
+    const r = extractExecutiveContacts(
+      'Disclosure Investors, Chairman. Mauritius Operations, CEO. Head OfficePlot No., Managing Director.',
+      'ir-page', 'NTPC');
+    expect(r.filter(c => c.name)).toHaveLength(0);
+  });
+  it('still accepts Mc/Mac names despite the mid-word-capital seam check', () => {
+    const r = extractExecutiveContacts('Ewan McGregor, CEO, announced the plan.');
+    expect(r.map(c => c.name)).toContain('Ewan McGregor');
+  });
+});
