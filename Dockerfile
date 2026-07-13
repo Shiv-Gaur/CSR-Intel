@@ -7,7 +7,7 @@ COPY package*.json tsconfig.json ./
 RUN npm ci
 
 COPY src ./src
-RUN npm run build && cp src/dashboard/dashboard.html dist/dashboard/
+RUN npm run build && cp src/dashboard/dashboard.html dist/dashboard/ && cp -r src/dashboard/assets dist/dashboard/
 
 # Remove development dependencies
 RUN npm prune --omit=dev

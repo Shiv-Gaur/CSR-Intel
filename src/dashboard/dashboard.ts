@@ -338,6 +338,21 @@ export function startDashboardServer(port = 3000) {
         return;
       }
 
+      // 1b. Static assets (currently just the DRIIV/PSA header logo).
+      if (pathname === '/assets/logo.png' && method === 'GET') {
+        const distPath = path.join(__dirname, 'assets', 'logo.png');
+        const srcPath = path.resolve(__dirname, '../../src/dashboard/assets/logo.png');
+        const assetPath = fs.existsSync(distPath) ? distPath : srcPath;
+        if (fs.existsSync(assetPath)) {
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+          res.end(fs.readFileSync(assetPath));
+        } else {
+          res.writeHead(404);
+          res.end('Not found');
+        }
+        return;
+      }
+
       // 2. GET /api/stats
       if (pathname === '/api/stats' && method === 'GET') {
         const statusRes = await getPool().query(`
