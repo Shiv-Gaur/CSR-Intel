@@ -113,7 +113,7 @@ export async function researchInnovator(
   // labels aggregator-only names as unverified.
   const keyContacts = mergeExecutiveContacts(perSource
     .filter(s => s.success)
-    .map(s => extractExecutiveContacts(s.text, s.label, name)));
+    .map(s => extractExecutiveContacts(s.text, s.label, name, website ?? null)));
   return {
     summary: generateSummary(combined),
     founding_year: extractFoundingYear(combined),

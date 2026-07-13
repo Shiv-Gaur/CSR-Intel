@@ -754,23 +754,51 @@
     // Emails here are ALWAYS literal strings found in a source page — never
     // constructed. as_of is the page's own recency marker (e.g. Wikipedia's
     // "last edited"); when it's old or absent we say so instead of implying current.
-    function contactsHtml(list){
-      if(!list||!list.length)return '<span style="color:var(--text-muted)">No contacts found in any source yet — re-enrich to search again.</span>';
+    function contactsHtml(list,editable){
+      if(!list||!list.length)return '<span style="color:var(--text-muted)">Leadership info not found — no reliable source published it. Re-enrich to search again.</span>';
       list=list.slice().sort(function(a,b){ return (a.name?0:1)-(b.name?0:1); }); // named people first, official channels below
-      return list.map(function(k){
+      return list.map(function(k,idx){
         var conf=String(k.confidence||'low'); var cls=conf==='high'?'green':conf==='medium'?'blue':'grey';
         var lead=k.name?('<b>'+esc(k.name)+'</b> <span class="csub">'+esc(k.title||'')+'</span>'):('<b>'+esc(k.title||'Contact')+'</b>');
         var emailLine=k.email?'<div><a href="mailto:'+esc(k.email)+'">'+esc(k.email)+'</a> <span class="csub">found in '+esc(k.source||'source')+'</span></div>':'<div class="csub">No public email found</div>';
         var prov;
-        if(k.as_of){ prov='As of '+esc(fmtDate(k.as_of))+' per '+esc(k.source||'source')+((daysSince(k.as_of)||0)>365?' — may be outdated':''); }
+        if(k.source==='manual'){ prov='Manually corrected '+esc(fmtDate(k.extracted_at)||''); }
+        else if(k.as_of){ prov='As of '+esc(fmtDate(k.as_of))+' per '+esc(k.source||'source')+((daysSince(k.as_of)||0)>365?' — may be outdated':''); }
         else if(k.extracted_at){ prov='via '+esc(k.source||'source')+' · page date unknown · extracted '+esc(fmtDate(k.extracted_at)); }
         else { prov=k.source?('via '+esc(k.source)):''; }
         var unver=k.verification?'<div style="color:var(--warn,#b45309);font-size:12px;margin-top:2px">⚠ '+esc(k.verification)+'</div>':'';
-        return '<div style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">'+
-          '<div>'+lead+emailLine+unver+'</div>'+
+        var fix=editable?'<div style="margin-top:4px"><a href="#" data-cfix="'+idx+'" style="font-size:11.5px">✎ Fix</a> · <a href="#" data-cdel="'+idx+'" style="font-size:11.5px;color:var(--danger)">Report incorrect</a></div>':'';
+        return '<div style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px" data-cname="'+esc(k.name||'')+'" data-ctitle="'+esc(k.title||'')+'">'+
+          '<div>'+lead+emailLine+unver+fix+'</div>'+
           '<div style="text-align:right;flex-shrink:0"><span class="badge '+cls+'" title="Extraction confidence">'+esc(conf)+'</span>'+
           (prov?'<div class="csub" style="margin-top:2px;max-width:190px">'+prov+'</div>':'')+'</div></div>';
       }).join('');
+    }
+    // Manual contact corrections — stored server-side as overrides that every
+    // future automated enrichment re-applies (same lock idea as company edits).
+    function wireContactFixes(companyId){
+      var detail=document.getElementById('detail');
+      Array.prototype.forEach.call(detail.querySelectorAll('[data-cfix],[data-cdel]'),function(a){
+        a.addEventListener('click',function(e){
+          e.preventDefault();
+          var card=a.closest('[data-ctitle]'); if(!card)return;
+          var curName=card.getAttribute('data-cname')||null, curTitle=card.getAttribute('data-ctitle');
+          var body={ name:curName||null, title:curTitle };
+          if(a.hasAttribute('data-cdel')){
+            if(!window.confirm('Report "'+(curName||curTitle)+'" as incorrect and remove it? Future re-enrichment will not bring it back.'))return;
+            body.remove=true;
+          }else{
+            var nn=window.prompt('Correct name (blank = no person name):',curName||''); if(nn===null)return;
+            var nt=window.prompt('Correct title:',curTitle); if(nt===null||!nt.trim())return;
+            var ne=window.prompt('Email (blank = none; only enter a REAL published address):',''); if(ne===null)return;
+            body.new_name=nn.trim()||null; body.new_title=nt.trim(); if(ne.trim())body.new_email=ne.trim();
+          }
+          fetch('/api/companies/'+companyId+'/contacts/override',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+            .then(function(r){return r.json();})
+            .then(function(res){ if(res&&res.success){ showToast('Correction saved — automation will never overwrite it'); fetch('/api/companies/'+companyId).then(function(r){return r.json();}).then(function(c){renderCompanyDetail(c);}); } else showToast(res&&res.error||'Could not save'); })
+            .catch(function(){ showToast('Request failed'); });
+        });
+      });
     }
     // Per-field provenance: "Extracted <date> from <link>" + verification state.
     function fieldProv(meta,verifiedAt,enrichedAt){
@@ -817,7 +845,7 @@
         if(c.domainFocus&&c.domainFocus.length)body+=field('Domain Focus',chips(c.domainFocus.map(domainLabel)));
         body+=field('Top Geographies'+mtag('geography_focus'),chips((c.geographyFocus||[]).slice(0,3)));
         body+=field('CSR Spend'+mtag('csr_spend_cr'),esc(spend));
-        body+=field('Key Contacts',contactsHtml(c.keyContacts));
+        body+=field('Key Contacts',contactsHtml(c.keyContacts,true));
       } else if(detailTab==='csr'){
         var fm=c.fieldMeta||{};
         body+=freshnessHtml(c.enrichedAt);
@@ -829,7 +857,7 @@
         body+=field('Accepts Proposals',esc(accepts));
         body+=field('Contact',email+(c.contactEmail?fieldProv(fm.contactEmail,c.verifiedAt,c.enrichedAt):''));
         body+=field('Application Portal / Website',portal);
-        body+=field('Key Contacts',contactsHtml(c.keyContacts));
+        body+=field('Key Contacts',contactsHtml(c.keyContacts,true));
         body+=field('Ownership / Technology Transfer',ownershipHtml(c.ownershipTransferOpen));
         var comous=c.mouHistory||[];
         body+=field('MoU History',comous.length?('<ul style="padding-left:16px">'+comous.map(function(m){return '<li style="font-size:12.5px"><b>'+esc(m.partner||'')+'</b>'+(m.year?' ('+esc(m.year)+')':'')+(m.description?' — '+esc(m.description):'')+'</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">No MoUs found in sources.</span>');
@@ -863,6 +891,7 @@
       var re=document.getElementById('reEnrich'); if(re)re.addEventListener('click',function(){ reEnrich(c.id,re); });
       var eb=document.getElementById('editBtn'); if(eb)eb.addEventListener('click',function(){ openEdit(c); });
       var db=document.getElementById('delBtn'); if(db)db.addEventListener('click',function(){ deleteCompany(c.id); });
+      wireContactFixes(c.id);
       if(detailTab==='match')loadFunderInnovatorMatches(c.id);
      } catch(err){ document.getElementById('detail').innerHTML='<div class="empty">Could not render details ('+esc(err.message)+').</div>'; }
     }

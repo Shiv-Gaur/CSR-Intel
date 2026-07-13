@@ -44,8 +44,12 @@ export async function fetchHTML(url: string): Promise<FetchResult> {
     });
 
     const $ = cheerio.load(response.data);
-    // Remove non-content elements
+    // Remove non-content elements, including footer-ish/disclaimer/legal blocks
+    // that are site-wide boilerplate — Moneycontrol's inline fraud disclaimer
+    // (grievanceofficer@nw18.com) sat OUTSIDE <footer> and leaked into the
+    // corpus of every company enriched.
     $('nav, header, footer, script, style, iframe, noscript, .cookie-banner, #cookie, .sidebar, .menu, .advertisement, .ad-container').remove();
+    $('[class*="footer"], [id*="footer"], [class*="disclaimer"], [id*="disclaimer"], [class*="copyright"], [class*="legal"]').remove();
 
     // Extract clean text
     const text = $('body').text().replace(/\s+/g, ' ').trim();

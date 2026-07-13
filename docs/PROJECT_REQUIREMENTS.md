@@ -4,7 +4,7 @@
 > completed or a new one is added. Do not drop requirements — if something can't be done
 > this session, it stays open here.
 >
-> Last updated: 2026-07-12
+> Last updated: 2026-07-13
 
 ## Requirements
 
@@ -128,3 +128,26 @@
 - [x] UI: permanent header "Re-enrich All" button (works even when nothing is
       stale), SVG delete icon (no more dark emoji box), sticky detail panel
       (position:sticky, follows scroll, click-again deselects) — DONE 2026-07-12.
+- [x] LinkedIn removed as a contact source — DONE 2026-07-13. extractExecutiveContacts
+      returns nothing for linkedin-sourced text (it fed wrong CEOs, e.g. BHEL "Kiran
+      Joseph"); stored linkedin contacts purged. LinkedIn text still feeds
+      sector/geo extraction. Fallback chain: own site → BSE/NSE/Zauba filings →
+      Wikipedia (labelled Unverified) → "Leadership info not found".
+- [x] PSU board-of-directors crawling — DONE 2026-07-13. official-site.ts BOARD_PATHS
+      always tried for psu/bank categories; CMD title pattern + board-grid name
+      boundary + trailing-designation trim. BHEL now shows "K. Sadashiv Murthy —
+      Chairman & Managing Director" from bhel.com/board-of-directors. Seeds added:
+      GAIL India, Union Bank of India (CINs deliberately omitted — unverified).
+- [x] Boilerplate email leak fixed — DONE 2026-07-13. grievanceofficer@nw18.com
+      (Moneycontrol's site-wide fraud disclaimer — Network18 property, NOT IndiaCSR)
+      had become contact_email for 168/173 companies. Three defenses: JUNK_EMAIL +=
+      publisher domains (nw18/news18/firstpost/cnbctv18/zaubacorp); every extracted
+      email must relate to the company (domain matches official site, name token, or
+      acronym — emailRelatesToCompany); fetchHTML strips footer/disclaimer/legal/
+      copyright elements. 169 bad contact_emails purged (incl. one NGO gmail on
+      Mphasis); 12 companies re-enriched clean under the new code.
+- [x] Manual contact corrections — DONE 2026-07-13. Per-contact "✎ Fix" / "Report
+      incorrect" in the company detail panel → POST /api/companies/:id/contacts/
+      override → stored in data.key_contact_overrides and re-applied after every
+      enrichment run (applyContactOverrides) — automation can never overwrite a
+      human fix; manual entries show source "manual", high confidence.

@@ -222,12 +222,20 @@ export function attributeAcrossSources(
 
 // ─── Supporting cheap extractors (regex only) ────────────────────────────────
 
-export function extractEmail(text: string): string | null {
+/**
+ * First email in the text that is not junk AND — when the entity is known —
+ * plausibly belongs to that entity. The corpus here is COMBINED source text, so
+ * without the relevance gate a publisher's boilerplate (Moneycontrol's
+ * grievanceofficer@nw18.com fraud disclaimer) wins for every company.
+ */
+export function extractEmail(text: string, entityName?: string, companyDomain?: string | null): string | null {
   if (!text) return null;
   const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    if (!JUNK_EMAIL.test(m[0])) return m[0];
+    if (JUNK_EMAIL.test(m[0])) continue;
+    if (entityName && !emailRelatesToCompany(m[0], entityName, companyDomain)) continue;
+    return m[0].toLowerCase();
   }
   return null;
 }
@@ -316,6 +324,11 @@ const TITLE_PATTERNS: Array<{ title: string; re: RegExp }> = [
   { title: 'Company Secretary', re: /\bcompany secretary\b/i },
   { title: 'Compliance Officer', re: /\bcompliance officer\b/i },
   { title: 'CEO', re: /\b(?:chief executive officer|ceo)\b/i },
+  // PSU convention: one person holds "Chairman & Managing Director" (CMD) —
+  // must match BEFORE the bare Managing Director pattern, or the name window
+  // swallows "Chairman" ("K. Sadashiv Murthy Chairman & Managing Director").
+  { title: 'Chairman & Managing Director', re: /\bchairman\s*(?:&|and)\s*managing\s+director\b/i },
+  { title: 'Chairman & Managing Director', re: /\bCMD\b/ }, // case-sensitive like MD
   { title: 'Managing Director', re: /\bmanaging\s+director\b/i },
   { title: 'Managing Director', re: /\bMD\b/ }, // case-sensitive: "MD", not "md"/"Md"
   { title: 'Chairman', re: /\b(?:chairman|chairperson|chairwoman)\b/i },
@@ -328,7 +341,7 @@ const HONORIFIC_SRC = String.raw`(?:Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Shri|Smt\.?)\s+`;
 
 // Words that mean a "name" capture is actually organisation/report/region
 // boilerplate ("Central Europe", "Tenure F. C. Kohli" from Wikipedia infoboxes).
-const NAME_STOPWORDS = /\b(?:limited|ltd|india|company|corporate|social|responsibility|foundation|officer|director|directors|committee|board|report|annual|policy|bank|group|private|the|tenure|central|europe|asia|africa|america|global|digital|services|solutions|technologies|region|international|speaks|says|announces|launches|welcomes|presents|celebrates|discusses|unveils|highlights|joins|visits|view|profile|profiles|message|read|more|know|non|executive|independent|whole|designate|finance|logistics|insurance|capital|motors|holidays|resorts|energy|power|steel|cement|pharma|chemicals|aviation|airlines|telecom|retail|realty|infrastructure|ventures|enterprises|industries|hotels|tractors|agri)\b/i;
+const NAME_STOPWORDS = /\b(?:limited|ltd|india|company|corporate|social|responsibility|foundation|officer|director|directors|committee|board|report|annual|policy|bank|group|private|the|tenure|central|europe|asia|africa|america|global|digital|services|solutions|technologies|region|international|speaks|says|announces|launches|welcomes|presents|celebrates|discusses|unveils|highlights|joins|visits|view|profile|profiles|message|read|more|know|non|executive|independent|whole|designate|chairman|chairperson|chairwoman|president|founder|finance|logistics|insurance|capital|motors|holidays|resorts|energy|power|steel|cement|pharma|chemicals|aviation|airlines|telecom|retail|realty|infrastructure|ventures|enterprises|industries|hotels|tractors|agri)\b/i;
 
 const HONORIFIC_WORD = /^(?:mr|mrs|ms|dr|shri|smt)\.?$/i;
 
@@ -351,6 +364,16 @@ function stripLeadingHonorifics(name: string): string {
   return name.replace(/^(?:(?:Mr|Mrs|Ms|Dr|Shri|Smt)\.?\s+)+/i, '').trim();
 }
 
+// Board pages repeat the designation right after the person ("Shri K. Sadashiv
+// Murthy Chairman & Managing Director") — the greedy name regex swallows those
+// trailing title words. Trim them off before judging plausibility.
+const TRAILING_TITLE_WORD = /^(?:chairman|chairperson|chairwoman|managing|director|ceo|cmd|md|president|executive|officer|secretary)$/i;
+function trimTrailingTitleWords(name: string): string {
+  const words = name.trim().split(/\s+/);
+  while (words.length > 1 && TRAILING_TITLE_WORD.test(words[words.length - 1])) words.pop();
+  return words.join(' ');
+}
+
 // Generic purpose-mailbox prefixes → standalone contacts with no person name.
 // Ordered by how official/reliable the channel is; the same order drives
 // pickOfficialContact(). Company Secretary/compliance mailboxes are a SEBI
@@ -367,7 +390,36 @@ const GENERIC_MAILBOXES: Array<{ re: RegExp; title: string; confidence: Confiden
 //  - placeholders/SDK addresses in page markup (form hints, schema examples);
 //  - the aggregator portals we scrape (an @nasscom.in email on a NASSCOM search
 //    page is a NASSCOM staffer, not the company being researched).
-const JUNK_EMAIL = /@(?:example\.|test\.|domain\.|company\.com$|email\.com$|yourdomain\.|sentry\.|schema\.org|nasscom\.in$|linkedin\.com$|yourstory\.com$|inc42\.com$|moneycontrol\.com$|indiacsr\.in$|indiacsrnetwork\.com$|wikipedia\.org$|wikimedia\.org$|screener\.in$|crunchbase\.com$|startupindia\.gov\.in$|bseindia\.com$|nseindia\.com$)/i;
+const JUNK_EMAIL = /@(?:example\.|test\.|domain\.|company\.com$|email\.com$|yourdomain\.|sentry\.|schema\.org|nasscom\.in$|linkedin\.com$|yourstory\.com$|inc42\.com$|moneycontrol\.com$|indiacsr\.in$|indiacsrnetwork\.com$|wikipedia\.org$|wikimedia\.org$|screener\.in$|crunchbase\.com$|startupindia\.gov\.in$|bseindia\.com$|nseindia\.com$|zaubacorp\.com$|nw18\.com$|network18online\.com$|news18\.com$|firstpost\.com$|cnbctv18\.com$)/i;
+
+/**
+ * Does an extracted email plausibly belong to the company being researched
+ * (rather than to the SOURCE website hosting the text)? True when:
+ *  - its registrable domain matches the company's known official domain, or
+ *  - the domain contains a distinctive token of the company name or its acronym
+ *    (bhel.co.in ⊃ "bhel", tcs.com ⊃ "tcs", bajajauto.com ⊃ "bajaj").
+ * grievanceofficer@nw18.com on a Moneycontrol page fails both for every company.
+ * Deliberately strict: a rejected real email shows as "No public email found",
+ * which the data-integrity standard prefers over a wrong one.
+ */
+export function emailRelatesToCompany(email: string, entityName: string, companyDomain?: string | null): boolean {
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  if (!domain) return false;
+  if (companyDomain) {
+    const official = companyDomain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    if (domain === official || domain.endsWith(`.${official}`) || official.endsWith(`.${domain}`)) return true;
+  }
+  const words = entityName.split(/\s+/).filter(Boolean);
+  const tokens = words.map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length >= 4 && !ENTITY_TOKEN_STOPWORDS.has(w));
+  if (words.length >= 2) {
+    const acronym = words.map(w => w[0]).join('').toLowerCase();
+    if (acronym.length >= 3) tokens.push(acronym);
+  }
+  if (words.length === 1 && words[0].length >= 3) tokens.push(words[0].toLowerCase());
+  const domainBody = domain.split('.').slice(0, -1).join('.'); // drop TLD
+  return tokens.some(t => domainBody.includes(t));
+}
 
 // Aggregator/search pages mix MANY companies on one page (LinkedIn "people also
 // viewed", IndiaCSR search results, NASSCOM listings) — a title+name found there
@@ -393,8 +445,13 @@ const ENTITY_TOKEN_STOPWORDS = new Set([
  * is kept only if the company itself is mentioned within ±300 chars — this
  * drops other companies' executives that share the page.
  */
-export function extractExecutiveContacts(text: string, source = 'text', entityName?: string): ExecutiveContact[] {
+export function extractExecutiveContacts(text: string, source = 'text', entityName?: string, companyDomain?: string | null): ExecutiveContact[] {
   if (!text) return [];
+  // LinkedIn is banned as a CONTACT source entirely (2026-07-13): public company
+  // pages mix employees, "people also viewed" and event attendees with no way to
+  // confirm a profile actually holds the claimed title — it produced flatly wrong
+  // CEOs (BHEL: "Kiran Joseph"). LinkedIn text still feeds sector/geo extraction.
+  if (source === 'linkedin') return [];
   const contacts: ExecutiveContact[] = [];
   const seen = new Set<string>();
   // Provenance stamped on every contact: when WE extracted it, and how current
@@ -449,6 +506,18 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
   // matcher swallow lowercase words ("Anil Sharma addressed…").
   const nameBefore = new RegExp(NAME_RE_SRC + String.raw`\s*[,(–—-]\s*(?:the\s+)?$`);
   const nameAfter = new RegExp(String.raw`^\s*[:,–—-]?\s*(?:${HONORIFIC_SRC})?` + NAME_RE_SRC);
+  // Board-page photo grids render "Name Title" with NO punctuation between them
+  // ("K. Sadashiv Murthy Chairman & Managing Director") — accept a bare
+  // whitespace boundary, but only on the company's own pages (tier 1), where a
+  // name directly abutting a title is the layout convention, not a coincidence.
+  const nameBeforePlain = new RegExp(NAME_RE_SRC + String.raw`\s+$`);
+  const allowPlainBoundary = contactSourceTier(source) === 1;
+  // Shared capture pipeline: trim trailing designation words, then plausibility.
+  const nameOf = (m: RegExpMatchArray | null): string | null => {
+    if (!m) return null;
+    const cand = trimTrailingTitleWords(m[1]);
+    return isPlausibleName(cand) ? cand : null;
+  };
   for (const { title, re } of TITLE_PATTERNS) {
     const tre = new RegExp(re.source, re.flags.includes('i') ? 'gi' : 'g');
     let m: RegExpExecArray | null;
@@ -466,10 +535,14 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
         const isTitleWord = orgAfter && /\b(?:CEO|MD|Chairman|Chairperson|Director|Officer|Secretary|President|Head|Founder)\b/i.test(orgAfter[1]);
         if (orgAfter && !isTitleWord && !orgMatchesEntity(orgAfter[1])) continue;
       }
-      const nb = before.match(nameBefore);   // "Kushagra Srivastava, CEO"
-      if (nb && isPlausibleName(nb[1])) push({ name: nb[1].trim(), title, email: null, source, confidence: 'medium' });
-      const na = after.match(nameAfter);     // "CEO: Mr. Anil Kumar Sharma"
-      if (na && isPlausibleName(na[1])) push({ name: na[1].trim(), title, email: null, source, confidence: 'medium' });
+      const nb = nameOf(before.match(nameBefore));   // "Kushagra Srivastava, CEO"
+      if (nb) push({ name: nb, title, email: null, source, confidence: 'medium' });
+      const na = nameOf(after.match(nameAfter));     // "CEO: Mr. Anil Kumar Sharma"
+      if (na) push({ name: na, title, email: null, source, confidence: 'medium' });
+      if (allowPlainBoundary && !nb) {
+        const nbp = nameOf(before.match(nameBeforePlain)); // "K. Sadashiv Murthy Chairman & Managing Director"
+        if (nbp) push({ name: nbp, title, email: null, source, confidence: 'medium' });
+      }
     }
   }
 
@@ -490,9 +563,14 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
   // confidence); collect generic purpose mailboxes as standalone contacts.
   const emailRe = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
   let em: RegExpExecArray | null;
+  // On non-official pages an email must plausibly belong to the researched
+  // company — a source site's own mailbox (publisher grievance/contact
+  // addresses) can never become the company's contact.
+  const requireRelevance = entityName && contactSourceTier(source) >= 2;
   while ((em = emailRe.exec(text)) !== null) {
     const email = em[0].toLowerCase();
     if (JUNK_EMAIL.test(email)) continue; // form placeholders, SDK addresses
+    if (requireRelevance && !emailRelatesToCompany(email, entityName!, companyDomain)) continue;
     const local = email.split('@')[0];
     const dotted = local.match(/^([a-z]+)[._]([a-z]+)$/);
     if (dotted) {
@@ -554,7 +632,7 @@ export function pickOfficialContact(contacts: ExecutiveContact[] | null | undefi
 // 3 = everything else (Wikipedia, LinkedIn, news/startup aggregators) — names
 //     here are kept only when they don't contradict a better source, and are
 //     labelled unverified unless a tier-1/2 source confirms them.
-const OFFICIAL_SITE_SOURCES = new Set(['official-site', 'contact-page', 'ir-page', 'investors-page', 'known']);
+const OFFICIAL_SITE_SOURCES = new Set(['official-site', 'contact-page', 'ir-page', 'investors-page', 'known', 'manual']);
 const REGULATORY_SOURCES = new Set(['bse-announcements', 'nse-announcements', 'zauba-directors']);
 
 export function contactSourceTier(source: string): 1 | 2 | 3 {
@@ -611,6 +689,46 @@ export function mergeExecutiveContacts(lists: ExecutiveContact[][]): ExecutiveCo
     if (!prev || (!prev.email && c.email)) byKey.set(key, c);
   }
   return [...byKey.values()].slice(0, 10);
+}
+
+// ─── Manual contact overrides ─────────────────────────────────────────────────
+
+/** A user correction to one extracted contact. `replace: null` removes it.
+ *  Stored in entities.data.key_contact_overrides; re-applied after every
+ *  enrichment run so automation can never overwrite a human fix. */
+export interface ContactOverride {
+  /** The (name|title) the automated pipeline produced, lowercased for matching. */
+  match: { name: string | null; title: string };
+  /** Corrected values, or null to remove the contact entirely. */
+  replace: { name: string | null; title: string; email: string | null } | null;
+  corrected_at: string;
+}
+
+/**
+ * Apply manual corrections on top of freshly extracted contacts. Matching is by
+ * (name|title), case-insensitive. A replacement that no longer matches anything
+ * is appended anyway — the human-verified contact must survive even when the
+ * automated extraction stops finding the wrong original.
+ */
+export function applyContactOverrides(contacts: ExecutiveContact[], overrides: ContactOverride[] | null | undefined): ExecutiveContact[] {
+  if (!overrides?.length) return contacts;
+  const key = (name: string | null | undefined, title: string) =>
+    `${(name ?? '').toLowerCase()}|${title.toLowerCase()}`;
+  let out = [...contacts];
+  for (const o of overrides) {
+    if (!o?.match?.title) continue;
+    const mk = key(o.match.name, o.match.title);
+    out = out.filter(c => key(c.name, c.title) !== mk);
+    if (o.replace) {
+      const manual: ExecutiveContact = {
+        name: o.replace.name, title: o.replace.title, email: o.replace.email,
+        source: 'manual', confidence: 'high', extracted_at: o.corrected_at, as_of: o.corrected_at.slice(0, 10),
+      };
+      // Dedupe in case the same correction was saved twice.
+      if (!out.some(c => key(c.name, c.title) === key(manual.name, manual.title))) out.unshift(manual);
+    }
+  }
+  return out.slice(0, 10);
 }
 
 // ─── Domain focus (the platform's 9 problem domains) ─────────────────────────

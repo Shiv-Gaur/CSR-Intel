@@ -260,6 +260,25 @@ export const KNOWN_URLS: KnownEntitySeed[] = [
     ticker: 'IOC',
     cin: 'L23201DL1959GOI002959',
   },
+  {
+    name: 'GAIL India',
+    urls: [
+      'https://gailonline.com/CSR.html',
+    ],
+    website: 'https://gailonline.com',
+    ticker: 'GAIL',
+    // CIN deliberately omitted — not verified against MCA; a guessed CIN would
+    // fetch the wrong company's Zauba directors page.
+  },
+  {
+    name: 'Union Bank of India',
+    urls: [
+      'https://www.unionbankofindia.co.in/en/details/csr-activities',
+    ],
+    website: 'https://www.unionbankofindia.co.in',
+    ticker: 'UNIONBANK',
+    // CIN deliberately omitted — not verified against MCA.
+  },
 
   // ──────────────────────────────────────── P3 — International Funders
   {

@@ -8,7 +8,7 @@ import {
   extractSectors, extractGeographies, extractSpend, generateSummary,
   extractEmail, extractRegistrations, detectAcceptsProposals, scoreCompany,
   attributeAcrossSources, extractExecutiveContacts, mergeExecutiveContacts,
-  pickOfficialContact,
+  applyContactOverrides, pickOfficialContact,
   detectDomainFocus, extractMoUHistory, detectOwnershipTransfer,
 } from '../utils/extractor.js';
 import { gatherSourceText } from '../tools/free-sources.js';
@@ -29,7 +29,7 @@ const MIN_COMBINED_CHARS = 100;
  * Run the deterministic extractors once over the combined text from all sources
  * and shape the result into the ConfidenceField record the DB/merge expects.
  */
-function buildExtractedFields(combined: string, primaryUrl: string): Partial<CompanyEntity> {
+function buildExtractedFields(combined: string, primaryUrl: string, entityName?: string, companyDomain?: string | null): Partial<CompanyEntity> {
   const now = new Date().toISOString();
   const cf = <T>(value: T | null, confidence: ConfidenceLevel): ConfidenceField<T> =>
     ({ value, confidence, source_url: primaryUrl, extracted_at: now });
@@ -37,7 +37,9 @@ function buildExtractedFields(combined: string, primaryUrl: string): Partial<Com
   const sectors = extractSectors(combined);
   const geographies = extractGeographies(combined);
   const spend = extractSpend(combined);
-  const email = extractEmail(combined);
+  // Combined corpus mixes source-site boilerplate with company text — the
+  // relevance gate stops publisher mailboxes becoming the company's contact.
+  const email = extractEmail(combined, entityName, companyDomain);
   const registrations = extractRegistrations(combined);
   const acceptsProposals = detectAcceptsProposals(combined);
 
@@ -148,7 +150,7 @@ export async function processEnrichmentTask(): Promise<boolean> {
 
     // Step 4 — deterministic extraction over the combined corpus, plus per-source
     // attribution (which source found which sector/geo) and agreement confidence.
-    const extracted = buildExtractedFields(combined, usable[0].url);
+    const extracted = buildExtractedFields(combined, usable[0].url, entityName, sourceEntity.website);
     const attribution = attributeAcrossSources(usable.map(s => ({ label: s.label, text: s.text })));
     // Lift sector_focus confidence to the strongest cross-source agreement.
     const bestAgreement = Object.values(attribution.sectorConfidence);
@@ -160,7 +162,7 @@ export async function processEnrichmentTask(): Promise<boolean> {
     // Step 4.2 — executive/leadership contacts, per source (keeps the source
     // label on each contact), pooled with email-bearing entries preferred.
     setStage(entityId, 'Extracting executive contacts…');
-    const contactLists = usable.map(s => extractExecutiveContacts(s.text, s.label, entityName));
+    const contactLists = usable.map(s => extractExecutiveContacts(s.text, s.label, entityName, sourceEntity.website));
 
     // Step 4.2b — the company's OWN website (when the curated seed knows it).
     // Feeds ONLY contact extraction — this text is never added to `combined`,
@@ -168,9 +170,12 @@ export async function processEnrichmentTask(): Promise<boolean> {
     if (sourceEntity.website) {
       setStage(entityId, 'Checking official website for contacts…');
       try {
-        const officialPages = await fetchCompanyOfficialContacts(sourceEntity.website);
+        // PSU/bank/government sites publish conventional board-of-directors
+        // pages — crawl those paths unconditionally for them.
+        const thorough = category === 'psu' || category === 'bank';
+        const officialPages = await fetchCompanyOfficialContacts(sourceEntity.website, { thorough });
         for (const page of officialPages) {
-          let found = extractExecutiveContacts(page.text, 'official-site', entityName);
+          let found = extractExecutiveContacts(page.text, 'official-site', entityName, sourceEntity.website);
           // Leadership NAMES are trusted only on genuine leadership/board/
           // management pages; on other official pages (contact forms, footers)
           // keep only email-bearing entries — a name printed beside its email
@@ -185,7 +190,13 @@ export async function processEnrichmentTask(): Promise<boolean> {
         logger.warn('Official-site contact fetch failed, continuing without it', { entityName, error: message });
       }
     }
-    const keyContacts = mergeExecutiveContacts(contactLists);
+    // Manual corrections (data.key_contact_overrides) always win over whatever
+    // automation just extracted — a human fix must survive every re-run.
+    const current = await getEntityById(entityId);
+    const keyContacts = applyContactOverrides(
+      mergeExecutiveContacts(contactLists),
+      (current as any)?.key_contact_overrides ?? null,
+    );
 
     // Step 4.3 — primary-contact fallback. Personal exec emails are rarely
     // public, so when raw extraction found no email, promote the best OFFICIAL
@@ -291,7 +302,7 @@ export async function processEnrichmentTask(): Promise<boolean> {
     // already passed verification. Only downgrade verified/complete when the
     // fresh data genuinely fails the quality gate (needsHumanReview); otherwise
     // keep the earned status and let the re-verify pass re-confirm it.
-    const current = await getEntityById(entityId);
+    // (`current` was fetched before contact-override application above.)
     const hadEarnedStatus = current?.status === 'verified' || current?.status === 'complete';
     if (!hadEarnedStatus || review.needed) {
       await updateEntityStatus(entityId, 'enriched');

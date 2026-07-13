@@ -3,6 +3,7 @@ import {
   extractExecutiveContacts, mergeExecutiveContacts,
   pickOfficialContact, extractSourceDate,
   detectDomainFocus, extractMoUHistory, detectOwnershipTransfer,
+  extractEmail, emailRelatesToCompany, applyContactOverrides,
 } from '../extractor.js';
 
 describe('extractExecutiveContacts', () => {
@@ -98,9 +99,11 @@ describe('pickOfficialContact', () => {
 
 describe('aggregator proximity gate', () => {
   it('drops another company\'s exec on a shared aggregator page', () => {
+    // (source was 'linkedin' before it was banned outright as a contact source;
+    // the proximity gate still protects every other aggregator.)
     const text = 'People also viewed: Stuart Machin, CEO of Marks and Spencer. ' + 'x'.repeat(400) +
       ' Tata Consultancy Services appointed K. Krithivasan, CEO, in 2023.';
-    const r = extractExecutiveContacts(text, 'linkedin', 'Tata Consultancy Services');
+    const r = extractExecutiveContacts(text, 'nasscom', 'Tata Consultancy Services');
     expect(r.map(c => c.name)).toContain('K. Krithivasan');
     expect(r.map(c => c.name)).not.toContain('Stuart Machin');
   });
@@ -120,11 +123,12 @@ describe('aggregator proximity gate', () => {
     expect(names).not.toContain('Dr. Vikas Garg');
   });
   it('rejects execs attributed to ANOTHER org even when the entity is mentioned nearby', () => {
-    // Real-world pattern from TCS's LinkedIn page: an M&S deal announcement.
+    // Real-world pattern (originally seen on a LinkedIn page — that source is now
+    // banned; the attribution gate still protects the remaining aggregators).
     const text = 'Key attendees from M&S included Stuart Machin, Chief Executive Officer, ' +
       'Sacha Berendji, Operations Director, and from Tata Consultancy Services, ' +
       'Rajesh Gopinathan, Chief Executive Officer, participated to mark this milestone.';
-    const names = extractExecutiveContacts(text, 'linkedin', 'Tata Consultancy Services').map(c => c.name);
+    const names = extractExecutiveContacts(text, 'nasscom', 'Tata Consultancy Services').map(c => c.name);
     expect(names).not.toContain('Stuart Machin');
     expect(names).toContain('Rajesh Gopinathan');
   });
@@ -301,5 +305,93 @@ describe('extractExecutiveContacts — official-page noise hardening', () => {
   it('rejects UI-chrome fragments like "View Profile" and "Non Executive"', () => {
     const r = extractExecutiveContacts('View Profile, Chairman. Non Executive, Managing Director.');
     expect(r.filter(x => x.name)).toHaveLength(0);
+  });
+});
+
+describe('LinkedIn contact ban + boilerplate email defenses', () => {
+  it('extracts NO contacts from linkedin-sourced text', () => {
+    const r = extractExecutiveContacts('Kiran Joseph, CEO at BHEL. Key people everywhere.', 'linkedin', 'BHEL');
+    expect(r).toHaveLength(0);
+  });
+
+  it('extractEmail rejects publisher boilerplate (nw18) even without entity context', () => {
+    expect(extractEmail('write to us at grievanceofficer@nw18.com or call')).toBeNull();
+  });
+
+  it('extractEmail with entity context rejects unrelated domains and accepts company ones', () => {
+    const corpus = 'contact editor@somenewsplace.com … or investor.relations@bhel.in for BHEL investors';
+    expect(extractEmail(corpus, 'BHEL')).toBe('investor.relations@bhel.in');
+  });
+
+  it('emailRelatesToCompany matches acronym, name token, and official domain', () => {
+    expect(emailRelatesToCompany('cs@bhel.co.in', 'BHEL')).toBe(true);
+    expect(emailRelatesToCompany('ir@bajajauto.com', 'Bajaj Auto')).toBe(true);
+    expect(emailRelatesToCompany('x@tcs.com', 'Tata Consultancy Services')).toBe(true);
+    expect(emailRelatesToCompany('grievanceofficer@nw18.com', 'BHEL')).toBe(false);
+    expect(emailRelatesToCompany('foo@colpal.com', 'Colgate-Palmolive India', 'https://www.colpal.com')).toBe(true);
+  });
+
+  it('aggregator-page emails must relate to the company', () => {
+    const r = extractExecutiveContacts('For queries: csr@randomportal.com', 'indiacsr', 'BHEL');
+    expect(r.find(c => c.email === 'csr@randomportal.com')).toBeUndefined();
+    const ok = extractExecutiveContacts('For queries: csr@bhel.in', 'indiacsr', 'BHEL');
+    expect(ok.find(c => c.email === 'csr@bhel.in')).toBeDefined();
+  });
+});
+
+describe('applyContactOverrides', () => {
+  const auto = [
+    { name: 'Kiran Joseph', title: 'CEO', email: null, source: 'nasscom', confidence: 'medium' as const },
+    { name: 'Real Chair', title: 'Chairman', email: null, source: 'official-site', confidence: 'medium' as const },
+  ];
+
+  it('replaces a wrong contact and marks it manual', () => {
+    const out = applyContactOverrides(auto, [{
+      match: { name: 'Kiran Joseph', title: 'CEO' },
+      replace: { name: 'Koppu Sadashiv Murthy', title: 'CEO', email: null },
+      corrected_at: '2026-07-13T00:00:00Z',
+    }]);
+    expect(out.find(c => c.name === 'Kiran Joseph')).toBeUndefined();
+    const fixed = out.find(c => c.name === 'Koppu Sadashiv Murthy');
+    expect(fixed).toBeDefined();
+    expect(fixed!.source).toBe('manual');
+  });
+
+  it('removes a reported-incorrect contact', () => {
+    const out = applyContactOverrides(auto, [{
+      match: { name: 'Kiran Joseph', title: 'CEO' }, replace: null, corrected_at: '2026-07-13T00:00:00Z',
+    }]);
+    expect(out).toHaveLength(1);
+  });
+
+  it('keeps the manual contact even when extraction no longer finds the original', () => {
+    const out = applyContactOverrides([], [{
+      match: { name: 'Kiran Joseph', title: 'CEO' },
+      replace: { name: 'Koppu Sadashiv Murthy', title: 'CEO', email: null },
+      corrected_at: '2026-07-13T00:00:00Z',
+    }]);
+    expect(out.find(c => c.name === 'Koppu Sadashiv Murthy')).toBeDefined();
+  });
+});
+
+describe('PSU "Chairman & Managing Director" pattern', () => {
+  it('captures a clean name before CMD without swallowing "Chairman"', () => {
+    const r = extractExecutiveContacts('K. Sadashiv Murthy Chairman & Managing Director since Nov 2023.', 'official-site', 'BHEL');
+    expect(r).toContainEqual(expect.objectContaining({ name: 'K. Sadashiv Murthy', title: 'Chairman & Managing Director' }));
+    expect(r.find(c => /Chairman/.test(c.name || ''))).toBeUndefined();
+  });
+});
+
+describe('real BHEL board page layout', () => {
+  it('extracts the CMD cleanly from the verbatim page text', () => {
+    // Verbatim from https://www.bhel.com/board-of-directors (fetched 2026-07-13).
+    const text = 'Board of Directors Chairman & Managing Director Shri K. Sadashiv Murthy ' +
+      'Chairman & Managing Director Bharat Heavy Electricals Limited Shri K Sadashiv Murthy ' +
+      'assumed the charge of Chairman & Managing Director on the Board of Bharat Heavy ' +
+      'Electricals Limited (BHEL) w.e.f. 1st November, 2023. View Profile';
+    const r = extractExecutiveContacts(text, 'official-site', 'BHEL');
+    const cmd = r.find(c => c.title === 'Chairman & Managing Director');
+    expect(cmd).toBeDefined();
+    expect(cmd!.name).toBe('K. Sadashiv Murthy');
   });
 });

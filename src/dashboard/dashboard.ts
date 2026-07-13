@@ -11,7 +11,7 @@ import {
 import { matchFundersForInnovator, matchInnovatorsForFunder } from '../tools/match-engine.js';
 import { DOMAIN_LABELS } from '../utils/innovator-match.js';
 import { computeProfileMatch } from '../utils/match.js';
-import { scoreCompany, sectorsAreRanked, domainFocusLabel, pickOfficialContact } from '../utils/extractor.js';
+import { scoreCompany, sectorsAreRanked, domainFocusLabel, pickOfficialContact, applyContactOverrides, type ContactOverride } from '../utils/extractor.js';
 import { inferSectorsFromText } from '../utils/inference.js';
 import { inferTRL } from '../utils/trl.js';
 import { getProgress } from '../utils/enrichment-progress.js';
@@ -87,6 +87,16 @@ const createInnovatorSchema = z.object({
 const bulkActionSchema = z.object({
   action: z.enum(['reenrich', 'delete', 'mark_reviewed']),
   ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+// Manual correction of one extracted key contact ("Report incorrect" / edit).
+const contactOverrideSchema = z.object({
+  name: z.string().trim().max(200).nullable(),
+  title: z.string().trim().min(1).max(200),
+  new_name: z.string().trim().max(200).nullable().optional(),
+  new_title: z.string().trim().min(1).max(200).optional(),
+  new_email: z.string().trim().email().nullable().optional(),
+  remove: z.boolean().optional(),
 });
 
 // Build the profile-match input from a flattened company. Coerces fields to
@@ -763,6 +773,47 @@ export function startDashboardServer(port = 3000) {
       if (pathname === '/api/reenrich-all/active' && method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(latestBatchIds()));
+        return;
+      }
+
+      // 5h. POST /api/companies/:id/contacts/override — manual correction of an
+      // extracted contact. Stored in data.key_contact_overrides and re-applied
+      // after every enrichment run, so automation can never overwrite it.
+      const contactOverrideMatch = pathname.match(/^\/api\/companies\/([a-f\d-]{36})\/contacts\/override$/i);
+      if (contactOverrideMatch && method === 'POST') {
+        const parsed = contactOverrideSchema.safeParse(await readJsonBody(req));
+        if (!parsed.success) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: parsed.error.issues.map(i => i.message).join('; ') }));
+          return;
+        }
+        const id = contactOverrideMatch[1];
+        const { rows } = await getPool().query(`SELECT data FROM entities WHERE id = $1`, [id]);
+        if (!rows.length) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Company not found' }));
+          return;
+        }
+        const b = parsed.data;
+        const override: ContactOverride = {
+          match: { name: b.name, title: b.title },
+          replace: b.remove ? null : {
+            name: b.new_name !== undefined ? b.new_name : b.name,
+            title: b.new_title ?? b.title,
+            email: b.new_email ?? null,
+          },
+          corrected_at: new Date().toISOString(),
+        };
+        const data = rows[0].data ?? {};
+        const overrides: ContactOverride[] = Array.isArray(data.key_contact_overrides) ? data.key_contact_overrides : [];
+        overrides.push(override);
+        const contacts = applyContactOverrides(Array.isArray(data.key_contacts) ? data.key_contacts : [], [override]);
+        await getPool().query(
+          `UPDATE entities SET data = data || jsonb_build_object('key_contact_overrides', $1::jsonb, 'key_contacts', $2::jsonb), updated_at = NOW() WHERE id = $3`,
+          [JSON.stringify(overrides), JSON.stringify(contacts), id]);
+        log.info('Contact override stored', { entityId: id, match: override.match, removed: !override.replace });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, key_contacts: contacts }));
         return;
       }
 

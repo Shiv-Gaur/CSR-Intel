@@ -27,7 +27,16 @@ const PAGE_KEYWORDS = /contact|leadership|management|board|investor|about|govern
 const MAX_CANDIDATE_PAGES = 4;
 
 /** Last-resort path guesses — tried only when sitemap AND homepage links yield nothing. */
-const FALLBACK_PATHS = ['contact-us', 'contact', 'investors', 'investor-relations', 'leadership', 'about-us'];
+const FALLBACK_PATHS = ['contact-us', 'contact', 'investors', 'investor-relations', 'leadership', 'about-us', 'board-of-directors'];
+
+/** PSU/government/bank sites almost always publish a photo-grid "Board of
+ *  Directors" page under one of a few conventional paths, and are typically
+ *  server-rendered (cheerio-friendly). With `thorough`, these are ALWAYS tried
+ *  in addition to whatever the sitemap/homepage yielded. */
+const BOARD_PATHS = [
+  'about-us/board-of-directors', 'board-of-directors', 'leadership',
+  'organisation/board-of-directors', 'about-us/leadership', 'about/board-of-directors',
+];
 
 /** Minimum usable text per page (same spirit as free-sources MIN_SOURCE_CHARS). */
 const MIN_PAGE_CHARS = 100;
@@ -113,7 +122,7 @@ function candidatesFromHomepage(root: string, html: string): string[] {
  * when it has usable text — footers often carry the only public email).
  * Fails soft: an unreachable site returns [] and costs a few fetches.
  */
-export async function fetchCompanyOfficialContacts(domain: string): Promise<OfficialSitePage[]> {
+export async function fetchCompanyOfficialContacts(domain: string, opts?: { thorough?: boolean }): Promise<OfficialSitePage[]> {
   const root = normaliseRoot(domain);
   const pages: OfficialSitePage[] = [];
 
@@ -135,6 +144,16 @@ export async function fetchCompanyOfficialContacts(domain: string): Promise<Offi
     .filter(u => u !== root && u !== `${root}/`)
     .sort((a, b) => a.length - b.length)
     .slice(0, MAX_CANDIDATE_PAGES);
+
+  // PSU mode: conventional board-page paths are tried ON TOP of the cap —
+  // a leadership page that 404s costs one cheap request, a hit costs a wrong CEO.
+  if (opts?.thorough) {
+    const have = new Set(candidates.map(u => u.replace(/\/+$/, '')));
+    for (const p of BOARD_PATHS) {
+      const u = `${root}/${p}`;
+      if (!have.has(u)) candidates.push(u);
+    }
+  }
 
   for (const url of candidates) {
     const r = await fetchHTML(url); // fails soft; guessed-path 404s are expected
