@@ -151,3 +151,18 @@
       override → stored in data.key_contact_overrides and re-applied after every
       enrichment run (applyContactOverrides) — automation can never overwrite a
       human fix; manual entries show source "manual", high confidence.
+- [x] PHASE 1: PostgreSQL → SQLite migration — DONE 2026-07-13. better-sqlite3
+      (sync, WAL) single file at ./data/csr-intel.db (SQLITE_PATH overridable).
+      src/db/sqlite.ts: pg-shaped query() facade ($N→named params, NOW()→ISO
+      strftime, TRUE/FALSE→1/0), central JSON (de)serialisation for old
+      JSONB/TEXT[] columns, transaction() helper. All 6 tables converted (TEXT
+      uuid PKs generated in JS, TEXT ISO timestamps, INTEGER booleans); every
+      query across dashboard/agents/tools/scripts rewritten (json_patch,
+      json_extract, json_each for ANY(), datetime modifiers for INTERVAL,
+      LIKE for ILIKE, aliased COUNT(*)). One-time importer
+      scripts/migrate-postgres-to-sqlite.ts RUN: all row counts matched —
+      entities 189 (173 companies + 16 schemes), innovators 5, task_queue 2076,
+      change_history 74, human_review_queue 260, match_profile 1. Postgres left
+      untouched as backup; pg dependency removed. Verified live: dashboard,
+      npm run status (identical counts), and a full TCS enrichment
+      write-cycle on SQLite. data/ gitignored.

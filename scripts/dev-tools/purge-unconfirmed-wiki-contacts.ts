@@ -47,14 +47,14 @@ async function main(): Promise<void> {
   let entitiesTouched = 0, entityContactsRemoved = 0;
 
   const ents = await pool.query(
-    `SELECT id, name, data->'key_contacts' AS contacts FROM entities
-     WHERE category != 'govt_scheme' AND jsonb_array_length(COALESCE(data->'key_contacts','[]'::jsonb)) > 0`);
+    `SELECT id, name, json_extract(data, '$.key_contacts') AS contacts FROM entities
+     WHERE category != 'govt_scheme' AND json_array_length(COALESCE(json_extract(data, '$.key_contacts'), '[]')) > 0`);
   for (const row of ents.rows) {
-    const list: StoredContact[] = Array.isArray(row.contacts) ? row.contacts : [];
+    const list: StoredContact[] = Array.isArray(row.contacts) ? row.contacts : (typeof row.contacts === 'string' ? JSON.parse(row.contacts) : []);
     const { kept, removed } = filterContacts(list);
     if (!removed.length) continue;
     await pool.query(
-      `UPDATE entities SET data = jsonb_set(data, '{key_contacts}', $1::jsonb), updated_at = NOW() WHERE id = $2`,
+      `UPDATE entities SET data = json_set(data, '$.key_contacts', json($1)), updated_at = NOW() WHERE id = $2`,
       [JSON.stringify(kept), row.id]);
     entitiesTouched++;
     entityContactsRemoved += removed.length;
@@ -66,13 +66,13 @@ async function main(): Promise<void> {
   let innovatorsTouched = 0, innovatorContactsRemoved = 0;
   const inns = await pool.query(
     `SELECT id, name, key_contacts FROM innovators
-     WHERE jsonb_array_length(COALESCE(key_contacts,'[]'::jsonb)) > 0`);
+     WHERE json_array_length(COALESCE(key_contacts, '[]')) > 0`);
   for (const row of inns.rows) {
     const list: StoredContact[] = Array.isArray(row.key_contacts) ? row.key_contacts : [];
     const { kept, removed } = filterContacts(list);
     if (!removed.length) continue;
     await pool.query(
-      `UPDATE innovators SET key_contacts = $1::jsonb, last_updated_at = NOW() WHERE id = $2`,
+      `UPDATE innovators SET key_contacts = $1, last_updated_at = NOW() WHERE id = $2`,
       [JSON.stringify(kept), row.id]);
     innovatorsTouched++;
     innovatorContactsRemoved += removed.length;

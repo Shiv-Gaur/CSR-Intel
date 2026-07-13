@@ -8,18 +8,22 @@ APIs, no search engines.
 
 ## Stack
 
-Node.js + TypeScript (ESM) · PostgreSQL (`pg`) · Zod · axios/node-fetch + p-queue/p-retry ·
+Node.js + TypeScript (ESM) · SQLite (`better-sqlite3`, single file at `./data/csr-intel.db`) · Zod · axios/node-fetch + p-queue/p-retry ·
 cheerio · pdf-parse · node-cron · pino · vitest
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env        # fill in DATABASE_URL etc.
-npm run db:migrate
+cp .env.example .env        # optional overrides (SQLITE_PATH, port, cron)
+npm run db:migrate          # creates ./data/csr-intel.db
 npm run db:seed
 npm run dev                 # dashboard on http://localhost:3000 + background workers
 ```
+
+No database server is required — storage is a single SQLite file (WAL mode).
+`scripts/migrate-postgres-to-sqlite.ts` is the retired one-time importer from
+the old Postgres setup (needs `npm i pg` to run again).
 
 ## Commands
 

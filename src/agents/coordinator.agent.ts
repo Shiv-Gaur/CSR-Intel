@@ -41,7 +41,7 @@ export async function runDailyRefresh(): Promise<void> {
     FROM entities
     WHERE status = 'complete'
       AND priority <= 2
-      AND updated_at < NOW() - INTERVAL '7 days'
+      AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days')
     ORDER BY priority ASC, updated_at ASC
     LIMIT 50
   `);
@@ -106,13 +106,13 @@ export async function printQASummary(): Promise<void> {
       SELECT status, COUNT(*) as count FROM entities GROUP BY status ORDER BY count DESC
     `),
     getTaskQueueStats(),
-    getPool().query(`SELECT COUNT(*) FROM human_review_queue WHERE resolved = FALSE`),
+    getPool().query(`SELECT COUNT(*) AS count FROM human_review_queue WHERE resolved = FALSE`),
     getPool().query(`
-      SELECT COUNT(*) FROM entities
-      WHERE data->>'missing_fields' IS NOT NULL
-        AND jsonb_array_length(data->'missing_fields') > 3
+      SELECT COUNT(*) AS count FROM entities
+      WHERE json_extract(data, '$.missing_fields') IS NOT NULL
+        AND json_array_length(data, '$.missing_fields') > 3
     `),
-    getPool().query(`SELECT COUNT(*) FROM entities WHERE drift_scores IS NOT NULL`),
+    getPool().query(`SELECT COUNT(*) AS count FROM entities WHERE drift_scores IS NOT NULL`),
   ]);
 
   const summary = {

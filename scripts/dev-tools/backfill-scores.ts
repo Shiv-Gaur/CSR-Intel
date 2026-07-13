@@ -24,7 +24,7 @@ async function backfillInnovators(): Promise<number> {
     const { score, indicators } = computeInnovatorSustainability(text, r.circularity_indicators ?? null);
     if (score <= 0) continue;
     await getPool().query(
-      `UPDATE innovators SET sustainability_score = $1, circularity_indicators = $2::jsonb, last_updated_at = NOW() WHERE id = $3`,
+      `UPDATE innovators SET sustainability_score = $1, circularity_indicators = $2, last_updated_at = NOW() WHERE id = $3`,
       [score, JSON.stringify(indicators), r.id]);
     logger.info('Backfilled sustainability score', { name: r.name, score });
     updated++;
@@ -47,7 +47,7 @@ async function backfillCompanyDomains(): Promise<number> {
     ].join(' ');
     const domains = detectDomainFocus(text);
     await getPool().query(
-      `UPDATE entities SET data = data || $1::jsonb, updated_at = NOW() WHERE id = $2`,
+      `UPDATE entities SET data = json_patch(data, $1), updated_at = NOW() WHERE id = $2`,
       [JSON.stringify({ domain_focus: domains }), r.id]);
     if (domains.length) updated++;
   }

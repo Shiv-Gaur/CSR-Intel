@@ -1,116 +1,123 @@
-import pg from 'pg';
-import type { Pool } from 'pg';
+import { getDb, query as sqliteQuery, transaction, uuid, closeDb, SQL_NOW, type QueryResult } from './sqlite.js';
 import { logger } from '../utils/logger.js';
 import { computeProfileMatch } from '../utils/match.js';
 import { computeInnovatorSustainability } from '../utils/sustainability.js';
 import type { CompanyEntity, Task, ChangeHistoryEntry } from '../types/index.js';
 
-const { Pool: PGPool } = pg;
-let pool: Pool;
+// ─── pg-compatible facade ─────────────────────────────────────────────────────
+// The codebase was written against pg's `getPool().query(sql, params)` returning
+// a promise of { rows, rowCount }. better-sqlite3 is synchronous; this facade
+// keeps every call site's shape (await works fine on plain values) while the
+// SQL itself was rewritten to SQLite dialect at each site.
 
-export function getPool(): Pool {
-  if (!pool) {
-    pool = new PGPool({
-      connectionString: process.env.DATABASE_URL,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    pool.on('error', (err: any) => logger.error('DB pool error', { err }));
-  }
-  return pool;
+export interface PoolLike {
+  query(text: string, params?: unknown[]): Promise<QueryResult>;
 }
 
+const poolFacade: PoolLike = {
+  async query(text: string, params: unknown[] = []): Promise<QueryResult> {
+    return sqliteQuery(text, params);
+  },
+};
+
+export function getPool(): PoolLike {
+  return poolFacade;
+}
+
+export { uuid, transaction, SQL_NOW };
+
 // ─── Schema migrations ────────────────────────────────────────────────────────
+// SQLite dialect: TEXT primary keys (uuids generated in JS), JSON stored as
+// TEXT (see sqlite.ts JSON_COLUMNS for boundary parsing), booleans as 0/1,
+// timestamps as ISO-8601 UTC TEXT.
 
 export async function runMigrations(): Promise<void> {
-  const client = await getPool().connect();
-  try {
-    await client.query('BEGIN');
-
+  const db = getDb();
+  const now = `DEFAULT (${SQL_NOW})`;
+  transaction(() => {
     // Entities table — stores all funders/companies/schemes
-    await client.query(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS entities (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
-        name_aliases TEXT[] DEFAULT '{}',
+        name_aliases TEXT DEFAULT '[]',
         cin TEXT,
         category TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'stub',
         priority INTEGER NOT NULL DEFAULT 4,
-        data JSONB NOT NULL DEFAULT '{}',
-        source_urls TEXT[] DEFAULT '{}',
-        missing_fields TEXT[] DEFAULT '{}',
-        conflict_log JSONB DEFAULT '[]',
-        drift_scores JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        data TEXT NOT NULL DEFAULT '{}',
+        source_urls TEXT DEFAULT '[]',
+        missing_fields TEXT DEFAULT '[]',
+        conflict_log TEXT DEFAULT '[]',
+        drift_scores TEXT,
+        profile_match_score INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT ${now},
+        updated_at TEXT ${now}
       )
     `);
 
     // Change history — every field-level change versioned
-    await client.query(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS change_history (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID REFERENCES entities(id),
+        id TEXT PRIMARY KEY,
+        entity_id TEXT REFERENCES entities(id),
         field_name TEXT NOT NULL,
-        old_value JSONB,
-        new_value JSONB,
+        old_value TEXT,
+        new_value TEXT,
         financial_year TEXT,
         change_type TEXT NOT NULL,
         source_url TEXT,
-        detected_at TIMESTAMPTZ DEFAULT NOW()
+        detected_at TEXT ${now}
       )
     `);
 
     // Task queue — all agent work items
-    await client.query(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS task_queue (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
-        entity_id UUID REFERENCES entities(id),
+        entity_id TEXT REFERENCES entities(id),
         entity_name TEXT,
         priority INTEGER DEFAULT 5,
-        payload JSONB DEFAULT '{}',
+        payload TEXT DEFAULT '{}',
         attempts INTEGER DEFAULT 0,
         max_attempts INTEGER DEFAULT 3,
         status TEXT DEFAULT 'pending',
         error TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        created_at TEXT ${now},
+        updated_at TEXT ${now}
       )
     `);
 
-    // Human review queue
-    await client.query(`
+    // Human review queue (resolved: 0/1)
+    db.exec(`
       CREATE TABLE IF NOT EXISTS human_review_queue (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID REFERENCES entities(id),
+        id TEXT PRIMARY KEY,
+        entity_id TEXT REFERENCES entities(id),
         reason TEXT NOT NULL,
-        details JSONB DEFAULT '{}',
-        resolved BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMPTZ DEFAULT NOW()
+        details TEXT DEFAULT '{}',
+        resolved INTEGER DEFAULT 0,
+        created_at TEXT ${now}
       )
     `);
 
     // Match profile — single-row store of the user's targeting profile
-    await client.query(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS match_profile (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        singleton BOOLEAN NOT NULL DEFAULT TRUE UNIQUE,
-        technologies TEXT[] NOT NULL DEFAULT '{}',
-        target_sectors TEXT[] NOT NULL DEFAULT '{}',
-        target_geographies TEXT[] NOT NULL DEFAULT '{}',
-        keywords TEXT[] NOT NULL DEFAULT '{}',
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        id TEXT PRIMARY KEY,
+        singleton INTEGER NOT NULL DEFAULT 1 UNIQUE,
+        technologies TEXT NOT NULL DEFAULT '[]',
+        target_sectors TEXT NOT NULL DEFAULT '[]',
+        target_geographies TEXT NOT NULL DEFAULT '[]',
+        keywords TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT ${now}
       )
     `);
 
-    // Innovators — Side B of the platform: startups / individual innovators /
-    // research institutes that get MATCHED to funders (companies + schemes).
-    await client.query(`
+    // Innovators — Side B of the platform
+    db.exec(`
       CREATE TABLE IF NOT EXISTS innovators (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id TEXT PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         type TEXT NOT NULL DEFAULT 'startup',
         domain TEXT NOT NULL,
@@ -120,64 +127,50 @@ export async function runMigrations(): Promise<void> {
         founder_name TEXT,
         trl_current INTEGER CHECK (trl_current BETWEEN 1 AND 9),
         trl_target INTEGER CHECK (trl_target BETWEEN 1 AND 9),
-        geography TEXT[] NOT NULL DEFAULT '{}',
+        geography TEXT NOT NULL DEFAULT '[]',
         usp TEXT,
         sustainability_score INTEGER NOT NULL DEFAULT 0 CHECK (sustainability_score BETWEEN 0 AND 100),
-        circularity_indicators JSONB NOT NULL DEFAULT '{"closed_loop":false,"zero_waste":false,"renewable_energy":false,"circular_economy":false}',
-        ownership_transfer_open BOOLEAN NOT NULL DEFAULT FALSE,
-        mou_history JSONB NOT NULL DEFAULT '[]',
+        circularity_indicators TEXT NOT NULL DEFAULT '{"closed_loop":false,"zero_waste":false,"renewable_energy":false,"circular_economy":false}',
+        ownership_transfer_open INTEGER NOT NULL DEFAULT 0,
+        mou_history TEXT NOT NULL DEFAULT '[]',
+        key_contacts TEXT NOT NULL DEFAULT '[]',
         innovation_stage TEXT NOT NULL DEFAULT 'prototype',
-        annual_revenue_cr NUMERIC,
-        funding_raised_cr NUMERIC,
+        annual_revenue_cr REAL,
+        funding_raised_cr REAL,
         team_size INTEGER,
         patents_filed INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
-        data JSONB NOT NULL DEFAULT '{}',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        last_updated_at TIMESTAMPTZ DEFAULT NOW()
+        data TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT ${now},
+        last_updated_at TEXT ${now}
       )
     `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_innovators_domain ON innovators(domain)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_innovators_status ON innovators(status)`);
 
-    // Executive/leadership contacts (CEO, MD, CSR Head …) extracted from sources.
-    // Companies store theirs inside entities.data (key_contacts); innovators get
-    // a dedicated column like their other structured fields.
-    await client.query(`ALTER TABLE innovators ADD COLUMN IF NOT EXISTS key_contacts JSONB NOT NULL DEFAULT '[]'`);
-
-    // Indexes
-    // Persisted profile-match score (recomputed whenever the profile is saved).
-    await client.query(`ALTER TABLE entities ADD COLUMN IF NOT EXISTS profile_match_score INTEGER NOT NULL DEFAULT 0`);
-
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_entities_profile_match ON entities(profile_match_score DESC)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_entities_priority ON entities(priority)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_entities_category ON entities(category)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status_type ON task_queue(status, type)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_priority ON task_queue(priority, created_at)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_history_entity ON change_history(entity_id)`);
-
-    await client.query('COMMIT');
-    logger.info('Database migrations completed successfully');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_innovators_domain ON innovators(domain)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_innovators_status ON innovators(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_status ON entities(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_profile_match ON entities(profile_match_score DESC)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_priority ON entities(priority)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_entities_category ON entities(category)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_type ON task_queue(status, type)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_priority ON task_queue(priority, created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_entity ON change_history(entity_id)`);
+  });
+  logger.info('Database migrations completed successfully (SQLite)');
 }
 
 // ─── Entity queries ───────────────────────────────────────────────────────────
 
 export async function upsertEntity(entity: Partial<CompanyEntity> & { name: string; category: string }): Promise<string> {
   const { rows } = await getPool().query(`
-    INSERT INTO entities (name, name_aliases, cin, category, status, priority, data, source_urls)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    INSERT INTO entities (id, name, name_aliases, cin, category, status, priority, data, source_urls)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (name) DO UPDATE SET
-      data = entities.data || EXCLUDED.data,
+      data = json_patch(entities.data, excluded.data),
       updated_at = NOW()
     RETURNING id
   `, [
+    uuid(),
     entity.name,
     entity.name_aliases ?? [],
     entity.cin ?? null,
@@ -204,8 +197,11 @@ export async function updateEntityStatus(id: string, status: string): Promise<vo
 }
 
 export async function updateEntityData(id: string, data: Record<string, unknown>): Promise<void> {
+  // json_patch = RFC 7386 merge — same shallow-merge semantics the jsonb ||
+  // operator provided, except explicit nulls REMOVE keys (which callers here
+  // never rely on; they pass real values or omit the key).
   await getPool().query(
-    'UPDATE entities SET data = data || $1::jsonb, updated_at = NOW() WHERE id = $2',
+    'UPDATE entities SET data = json_patch(data, $1), updated_at = NOW() WHERE id = $2',
     [JSON.stringify(data), id]
   );
 }
@@ -220,16 +216,17 @@ export async function updateDriftScores(id: string, scores: object): Promise<voi
 // ─── Task queue queries ───────────────────────────────────────────────────────
 
 export async function enqueueTask(task: Omit<Task, 'id' | 'created_at' | 'updated_at' | 'attempts' | 'status'>): Promise<string> {
-  const { rows } = await getPool().query(`
-    INSERT INTO task_queue (type, entity_id, entity_name, priority, payload, max_attempts)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id
-  `, [task.type, task.entity_id, task.entity_name, task.priority, JSON.stringify(task.payload), task.max_attempts ?? 3]);
-  return rows[0].id;
+  const id = uuid();
+  await getPool().query(`
+    INSERT INTO task_queue (id, type, entity_id, entity_name, priority, payload, max_attempts)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [id, task.type, task.entity_id, task.entity_name, task.priority, JSON.stringify(task.payload), task.max_attempts ?? 3]);
+  return id;
 }
 
 export async function claimNextTask(type: string): Promise<Task | null> {
-  // Atomic claim: UPDATE ... RETURNING to avoid race conditions between parallel workers
+  // Single process + synchronous driver → the UPDATE-of-subselect is atomic;
+  // pg's FOR UPDATE SKIP LOCKED lock dance is unnecessary here.
   const { rows } = await getPool().query(`
     UPDATE task_queue
     SET status = 'running', attempts = attempts + 1, updated_at = NOW()
@@ -238,7 +235,6 @@ export async function claimNextTask(type: string): Promise<Task | null> {
       WHERE type = $1 AND status = 'pending' AND attempts < max_attempts
       ORDER BY priority ASC, created_at ASC
       LIMIT 1
-      FOR UPDATE SKIP LOCKED
     )
     RETURNING *
   `, [type]);
@@ -262,7 +258,7 @@ export async function getTaskQueueStats(): Promise<Record<string, number>> {
     FROM task_queue GROUP BY type, status
   `);
   const stats: Record<string, number> = {};
-  rows.forEach((r: any) => { stats[`${r.type}:${r.status}`] = parseInt(r.count); });
+  rows.forEach((r: any) => { stats[`${r.type}:${r.status}`] = Number(r.count); });
   return stats;
 }
 
@@ -270,9 +266,9 @@ export async function getTaskQueueStats(): Promise<Record<string, number>> {
 
 export async function insertChangeHistory(entry: Omit<ChangeHistoryEntry, 'id'>): Promise<void> {
   await getPool().query(`
-    INSERT INTO change_history (entity_id, field_name, old_value, new_value, financial_year, change_type, source_url)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-  `, [entry.entity_id, entry.field_name, JSON.stringify(entry.old_value), JSON.stringify(entry.new_value),
+    INSERT INTO change_history (id, entity_id, field_name, old_value, new_value, financial_year, change_type, source_url)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [uuid(), entry.entity_id, entry.field_name, JSON.stringify(entry.old_value), JSON.stringify(entry.new_value),
       entry.financial_year, entry.change_type, entry.source_url]);
 }
 
@@ -288,8 +284,8 @@ export async function getChangeHistory(entity_id: string): Promise<ChangeHistory
 
 export async function addToHumanReview(entity_id: string, reason: string, details: object): Promise<void> {
   await getPool().query(
-    'INSERT INTO human_review_queue (entity_id, reason, details) VALUES ($1, $2, $3)',
-    [entity_id, reason, JSON.stringify(details)]
+    'INSERT INTO human_review_queue (id, entity_id, reason, details) VALUES ($1, $2, $3, $4)',
+    [uuid(), entity_id, reason, JSON.stringify(details)]
   );
   await updateEntityStatus(entity_id, 'human_review');
   logger.warn('Entity flagged for human review', { entity_id, reason });
@@ -346,36 +342,29 @@ export async function rerankAllProfileScores(): Promise<number> {
 
 export async function upsertMatchProfile(p: MatchProfile): Promise<void> {
   await getPool().query(`
-    INSERT INTO match_profile (singleton, technologies, target_sectors, target_geographies, keywords, updated_at)
-    VALUES (TRUE, $1, $2, $3, $4, NOW())
+    INSERT INTO match_profile (id, singleton, technologies, target_sectors, target_geographies, keywords, updated_at)
+    VALUES ($1, TRUE, $2, $3, $4, $5, NOW())
     ON CONFLICT (singleton) DO UPDATE SET
-      technologies = EXCLUDED.technologies,
-      target_sectors = EXCLUDED.target_sectors,
-      target_geographies = EXCLUDED.target_geographies,
-      keywords = EXCLUDED.keywords,
+      technologies = excluded.technologies,
+      target_sectors = excluded.target_sectors,
+      target_geographies = excluded.target_geographies,
+      keywords = excluded.keywords,
       updated_at = NOW()
-  `, [p.technologies, p.target_sectors, p.target_geographies, p.keywords]);
+  `, [uuid(), p.technologies, p.target_sectors, p.target_geographies, p.keywords]);
 }
 
 // ─── Manual CRUD support ──────────────────────────────────────────────────────
 
 /** Delete an entity and all rows that reference it (FKs have no ON DELETE CASCADE). */
 export async function deleteEntityCascade(id: string): Promise<boolean> {
-  const client = await getPool().connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('DELETE FROM change_history WHERE entity_id = $1', [id]);
-    await client.query('DELETE FROM task_queue WHERE entity_id = $1', [id]);
-    await client.query('DELETE FROM human_review_queue WHERE entity_id = $1', [id]);
-    const r = await client.query('DELETE FROM entities WHERE id = $1', [id]);
-    await client.query('COMMIT');
-    return (r.rowCount ?? 0) > 0;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  return transaction(() => {
+    const db = getDb();
+    db.prepare('DELETE FROM change_history WHERE entity_id = ?').run(id);
+    db.prepare('DELETE FROM task_queue WHERE entity_id = ?').run(id);
+    db.prepare('DELETE FROM human_review_queue WHERE entity_id = ?').run(id);
+    const r = db.prepare('DELETE FROM entities WHERE id = ?').run(id);
+    return r.changes > 0;
+  });
 }
 
 export interface ManualEdit {
@@ -388,8 +377,11 @@ export interface ManualEdit {
 
 /** Which fields are user-locked, so the pipeline won't overwrite them. */
 export async function getManualOverrides(id: string): Promise<Record<string, boolean>> {
-  const { rows } = await getPool().query(`SELECT data->'manual_overrides' AS mo FROM entities WHERE id = $1`, [id]);
-  return (rows[0]?.mo as Record<string, boolean> | null) ?? {};
+  const { rows } = await getPool().query(
+    `SELECT json_extract(data, '$.manual_overrides') AS mo FROM entities WHERE id = $1`, [id]);
+  const raw = rows[0]?.mo;
+  if (!raw) return {};
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return {}; }
 }
 
 /** Apply manual edits, marking the touched fields as manual overrides (locked). */
@@ -410,7 +402,7 @@ export async function applyManualEdits(id: string, edit: ManualEdit): Promise<vo
   if (edit.name) {
     await getPool().query('UPDATE entities SET name = $1, updated_at = NOW() WHERE id = $2', [edit.name, id]);
   }
-  await getPool().query('UPDATE entities SET data = data || $1::jsonb, updated_at = NOW() WHERE id = $2', [JSON.stringify(data), id]);
+  await getPool().query('UPDATE entities SET data = json_patch(data, $1), updated_at = NOW() WHERE id = $2', [JSON.stringify(data), id]);
 }
 
 // ─── Innovators (Side B) ──────────────────────────────────────────────────────
@@ -444,9 +436,7 @@ export interface InnovatorInsert {
 
 export async function insertInnovator(inn: InnovatorInsert): Promise<string> {
   // No explicit score supplied → compute one now from the innovator's own
-  // description/USP text + any provided circularity indicators. Previously the
-  // column silently defaulted to 0 and stayed 0 unless deep research succeeded
-  // later — which is why every seed showed 0/100 in the UI.
+  // description/USP text + any provided circularity indicators.
   const computed = computeInnovatorSustainability(
     [inn.description ?? '', inn.usp ?? ''].join(' '),
     inn.circularity_indicators ?? null,
@@ -456,16 +446,16 @@ export async function insertInnovator(inn: InnovatorInsert): Promise<string> {
 
   const { rows } = await getPool().query(`
     INSERT INTO innovators (
-      name, type, domain, description, website, contact_email, founder_name,
+      id, name, type, domain, description, website, contact_email, founder_name,
       trl_current, trl_target, geography, usp, sustainability_score,
       circularity_indicators, ownership_transfer_open, mou_history,
       innovation_stage, annual_revenue_cr, funding_raised_cr, team_size,
       patents_filed, status, data
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
     ON CONFLICT (name) DO UPDATE SET last_updated_at = NOW()
     RETURNING id
   `, [
-    inn.name, inn.type ?? 'startup', inn.domain, inn.description ?? null,
+    uuid(), inn.name, inn.type ?? 'startup', inn.domain, inn.description ?? null,
     inn.website ?? null, inn.contact_email ?? null, inn.founder_name ?? null,
     inn.trl_current ?? null, inn.trl_target ?? null, inn.geography ?? [],
     inn.usp ?? null, sustainabilityScore,
@@ -499,15 +489,12 @@ const INNOVATOR_PATCH_COLS = new Set([
 
 /** Patch scalar/array columns; only whitelisted keys present in `patch` are updated. */
 export async function updateInnovator(id: string, patch: Partial<InnovatorInsert>): Promise<void> {
-  const jsonCols = new Set(['circularity_indicators', 'mou_history', 'key_contacts', 'data']);
   const cols = Object.keys(patch).filter(k =>
     INNOVATOR_PATCH_COLS.has(k) && (patch as Record<string, unknown>)[k] !== undefined);
   if (!cols.length) return;
-  const sets = cols.map((c, i) => `${c} = $${i + 2}${jsonCols.has(c) ? '::jsonb' : ''}`);
-  const vals = cols.map(c => {
-    const v = (patch as Record<string, unknown>)[c];
-    return jsonCols.has(c) ? JSON.stringify(v) : v;
-  });
+  // Arrays/objects/booleans are converted centrally by the sqlite param layer.
+  const sets = cols.map((c, i) => `${c} = $${i + 2}`);
+  const vals = cols.map(c => (patch as Record<string, unknown>)[c]);
   await getPool().query(
     `UPDATE innovators SET ${sets.join(', ')}, last_updated_at = NOW() WHERE id = $1`,
     [id, ...vals]
@@ -522,15 +509,13 @@ export async function deleteInnovator(id: string): Promise<boolean> {
 export async function getInnovatorCounts(): Promise<Record<string, number>> {
   const { rows } = await getPool().query(`SELECT status, COUNT(*) AS count FROM innovators GROUP BY status`);
   const counts: Record<string, number> = {};
-  rows.forEach((r: any) => { counts[r.status] = parseInt(r.count); });
+  rows.forEach((r: any) => { counts[r.status] = Number(r.count); });
   return counts;
 }
 
 export async function testConnection(): Promise<boolean> {
   try {
-    const client = await getPool().connect();
-    await client.query('SELECT 1');
-    client.release();
+    await getPool().query('SELECT 1');
     return true;
   } catch (err) {
     logger.error('Database connection failed', { err });
@@ -539,5 +524,5 @@ export async function testConnection(): Promise<boolean> {
 }
 
 export async function closePool(): Promise<void> {
-  await getPool().end();
+  closeDb();
 }

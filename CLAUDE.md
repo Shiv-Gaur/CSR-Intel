@@ -6,7 +6,7 @@ Agent-based pipeline for CSR funding discovery, enrichment, verification, and dr
 
 - **Runtime:** Node.js + TypeScript (ESM, `"type": "module"`)
 - **LLM:** Ollama (local) — never call external LLM APIs without explicit instruction
-- **DB:** PostgreSQL via `pg` — parameterised queries only, never string interpolation
+- **DB:** SQLite via `better-sqlite3` (single file, default `./data/csr-intel.db`) — parameterised queries only, never string interpolation; JSON columns (de)serialised centrally in `src/db/sqlite.ts`
 - **Validation:** Zod — all external input must be validated before use
 - **HTTP:** axios + node-fetch (streaming) + p-queue (rate limiting) + p-retry (retries)
 - **Scraping:** cheerio

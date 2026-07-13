@@ -139,7 +139,7 @@ async function main() {
   for (const t of TARGETS) {
     const { rows } = await getPool().query(
       `SELECT id, name, data, source_urls, profile_match_score FROM entities
-       WHERE category != 'govt_scheme' AND name ILIKE $1 ORDER BY name LIMIT 1`, [`%${t}%`]);
+       WHERE category != 'govt_scheme' AND name LIKE $1 ORDER BY name LIMIT 1`, [`%${t}%`]);
     if (!rows.length) { console.log(`\n### ${t}: NOT FOUND in entities`); continue; }
     const r = rows[0];
     const data = r.data || {};

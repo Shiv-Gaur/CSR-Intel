@@ -191,7 +191,7 @@ export async function runDiscoveryAgent(): Promise<void> {
   // 2. Discover from CSR portal (additional entities)
   await discoverFromCSRPortal();
 
-  const stats = await getPool().query('SELECT COUNT(*) FROM entities WHERE status = $1', ['stub']);
+  const stats = await getPool().query('SELECT COUNT(*) AS count FROM entities WHERE status = $1', ['stub']);
   logger.info('=== Discovery agent complete ===', { total_stubs: stats.rows[0].count });
 }
 
@@ -326,7 +326,7 @@ export async function runBootstrapDiscovery(): Promise<{ added: number; total: n
     }
   }
 
-  const totalRes = await getPool().query('SELECT COUNT(*) FROM entities');
+  const totalRes = await getPool().query('SELECT COUNT(*) AS count FROM entities');
   const total = Number(totalRes.rows[0].count);
   logger.info('=== Bootstrap discovery complete ===', { added, total });
   return { added, total };

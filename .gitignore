@@ -18,3 +18,6 @@ coverage/
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Runtime database (SQLite single file + WAL sidecars)
+data/

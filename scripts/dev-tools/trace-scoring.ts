@@ -18,7 +18,7 @@ async function main() {
 
   for (const name of NAMES) {
     const { rows } = await getPool().query(
-      `SELECT * FROM entities WHERE name ILIKE $1 AND category != 'govt_scheme' LIMIT 1`, ['%' + name + '%']);
+      `SELECT * FROM entities WHERE name LIKE $1 AND category != 'govt_scheme' LIMIT 1`, ['%' + name + '%']);
     if (!rows.length) { console.log(`\n### ${name}: NOT FOUND`); continue; }
     const row = rows[0];
     const data = row.data || {};

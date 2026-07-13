@@ -529,7 +529,7 @@ export function startDashboardServer(port = 3000) {
           return;
         }
         const id = await upsertEntity({ name, category, status: 'stub' });
-        await getPool().query(`UPDATE entities SET data = data || '{"manual_added":true}'::jsonb WHERE id = $1`, [id]);
+        await getPool().query(`UPDATE entities SET data = json_patch(data, '{"manual_added":true}') WHERE id = $1`, [id]);
         // Enqueue at top priority so the worker picks it up immediately.
         await enqueueTask({ type: 'enrich', entity_id: id, entity_name: name, priority: 0, payload: { category }, max_attempts: 3 });
         log.info('Manual company added + enrichment queued', { name, id });
@@ -668,7 +668,7 @@ export function startDashboardServer(port = 3000) {
            WHERE entity_id = $1 AND type = 'enrich' AND status IN ('pending', 'running')
            ORDER BY updated_at DESC LIMIT 1`, [id]);
         const entRes = await getPool().query(
-          `SELECT data->>'enriched_at' AS enriched_at FROM entities WHERE id = $1`, [id]);
+          `SELECT json_extract(data, '$.enriched_at') AS enriched_at FROM entities WHERE id = $1`, [id]);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           progress,
@@ -685,7 +685,7 @@ export function startDashboardServer(port = 3000) {
       if (pathname === '/api/companies/reenrich-all' && method === 'POST') {
         const staleOnly = urlObj.searchParams.get('staleOnly') === 'true';
         const staleClause = staleOnly
-          ? `AND (data->>'enriched_at' IS NULL OR (data->>'enriched_at')::timestamptz < NOW() - INTERVAL '30 days')`
+          ? `AND (json_extract(data, '$.enriched_at') IS NULL OR json_extract(data, '$.enriched_at') < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'))`
           : '';
         const { rows } = await getPool().query(
           `SELECT id, name, category FROM entities WHERE category != 'govt_scheme' ${staleClause} ORDER BY name`);
@@ -716,7 +716,7 @@ export function startDashboardServer(port = 3000) {
           return;
         }
         const { rows } = await getPool().query(
-          `SELECT status, COUNT(*)::int AS n FROM task_queue WHERE id = ANY($1::uuid[]) GROUP BY status`,
+          `SELECT status, COUNT(*) AS n FROM task_queue WHERE id IN (SELECT value FROM json_each($1)) GROUP BY status`,
           [batch.taskIds]);
         const byStatus: Record<string, number> = {};
         for (const r of rows) byStatus[r.status] = r.n;
@@ -726,7 +726,7 @@ export function startDashboardServer(port = 3000) {
         const queued = (byStatus.pending ?? 0) + running;
         const curRes = running
           ? await getPool().query(
-              `SELECT entity_id, entity_name FROM task_queue WHERE id = ANY($1::uuid[]) AND status = 'running' LIMIT 1`,
+              `SELECT entity_id, entity_name FROM task_queue WHERE id IN (SELECT value FROM json_each($1)) AND status = 'running' LIMIT 1`,
               [batch.taskIds])
           : { rows: [] as any[] };
         const cur = curRes.rows[0] ?? null;
@@ -749,7 +749,7 @@ export function startDashboardServer(port = 3000) {
       if (pathname === '/api/innovators/reenrich-all' && method === 'POST') {
         const staleOnly = urlObj.searchParams.get('staleOnly') === 'true';
         const staleClause = staleOnly
-          ? `WHERE data->>'research_at' IS NULL OR (data->>'research_at')::timestamptz < NOW() - INTERVAL '30 days'`
+          ? `WHERE json_extract(data, '$.research_at') IS NULL OR json_extract(data, '$.research_at') < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`
           : '';
         const { rows } = await getPool().query(`SELECT id, name FROM innovators ${staleClause} ORDER BY name`);
         const { enrichInnovator } = await import('../tools/innovator-research.js');
@@ -824,7 +824,7 @@ export function startDashboardServer(port = 3000) {
         overrides.push(override);
         const contacts = applyContactOverrides(Array.isArray(data.key_contacts) ? data.key_contacts : [], [override]);
         await getPool().query(
-          `UPDATE entities SET data = data || jsonb_build_object('key_contact_overrides', $1::jsonb, 'key_contacts', $2::jsonb), updated_at = NOW() WHERE id = $3`,
+          `UPDATE entities SET data = json_patch(data, json_object('key_contact_overrides', json($1), 'key_contacts', json($2))), updated_at = NOW() WHERE id = $3`,
           [JSON.stringify(overrides), JSON.stringify(contacts), id]);
         log.info('Contact override stored', { entityId: id, match: override.match, removed: !override.replace });
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1045,13 +1045,13 @@ export function startDashboardServer(port = 3000) {
         if (action === 'delete') {
           for (const id of ids) { if (await deleteEntityCascade(id)) affected++; }
         } else if (action === 'reenrich') {
-          const r = await getPool().query(`SELECT id, name, category FROM entities WHERE id = ANY($1)`, [ids]);
+          const r = await getPool().query(`SELECT id, name, category FROM entities WHERE id IN (SELECT value FROM json_each($1))`, [ids]);
           for (const row of r.rows) {
             await enqueueTask({ type: 'enrich', entity_id: row.id, entity_name: row.name, priority: 1, payload: { category: row.category }, max_attempts: 3 });
             affected++;
           }
         } else if (action === 'mark_reviewed') {
-          const r = await getPool().query(`UPDATE human_review_queue SET resolved = TRUE WHERE entity_id = ANY($1) AND resolved = FALSE`, [ids]);
+          const r = await getPool().query(`UPDATE human_review_queue SET resolved = 1 WHERE entity_id IN (SELECT value FROM json_each($1)) AND resolved = 0`, [ids]);
           affected = r.rowCount ?? 0;
         }
         log.info('Bulk action applied', { action, count: ids.length, affected });

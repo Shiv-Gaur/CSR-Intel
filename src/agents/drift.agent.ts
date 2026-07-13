@@ -207,7 +207,7 @@ async function processDriftTask(): Promise<boolean> {
 
     // Store drift signals summary
     await getPool().query(
-      `UPDATE entities SET data = data || $1::jsonb, status = 'complete', updated_at = NOW() WHERE id = $2`,
+      `UPDATE entities SET data = json_patch(data, $1), status = 'complete', updated_at = NOW() WHERE id = $2`,
       [JSON.stringify({
         drift_signals: driftResult.drift_signals,
         drift_gaps: driftResult.gaps,

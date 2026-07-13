@@ -13,8 +13,10 @@ import 'dotenv/config';
 export const SEARCH_FREE_MODE = (process.env.SEARCH_FREE_MODE ?? 'true').toLowerCase() !== 'false';
 
 const configSchema = z.object({
-  // Database
-  databaseUrl: z.string().url(),
+  // Database — single-file SQLite (Postgres retired 2026-07-13; DATABASE_URL is
+  // kept only for the one-time scripts/migrate-postgres-to-sqlite.ts run).
+  sqlitePath: z.string().default('./data/csr-intel.db'),
+  databaseUrl: z.string().default(''),
 
   // LLM removed — kept for backward compat only
   llmBaseUrl: z.string().default(''),
@@ -56,6 +58,7 @@ export type Config = z.infer<typeof configSchema>;
 
 function loadConfig(): Config {
   const raw = {
+    sqlitePath: process.env.SQLITE_PATH,
     databaseUrl: process.env.DATABASE_URL,
     llmBaseUrl: process.env.LLM_BASE_URL,
     llmModel: process.env.LLM_MODEL,
