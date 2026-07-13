@@ -166,3 +166,14 @@
       untouched as backup; pg dependency removed. Verified live: dashboard,
       npm run status (identical counts), and a full TCS enrichment
       write-cycle on SQLite. data/ gitignored.
+- [x] PHASE 2: Electron desktop shell — DONE 2026-07-13. electron/main.ts spawns
+      the existing server (dashboard+workers+cron) as a `node dist/index.js`
+      CHILD (avoids better-sqlite3 Electron-ABI rebuild; kill child = clean stop
+      of server AND cron; single-instance lock prevents duplicate cron on
+      relaunch). Attach mode when a dev server already owns port 3000.
+      1400x900 window (min 1000x640), DRIIV-seal icon (electron/icon.ico via
+      png-to-ico), minimal CJS preload (sandbox requires CJS). Packaged mode
+      stores DB at app.getPath('userData') with first-run copy from resources.
+      Scripts: electron:dev / electron:start / electron:build. Verified live:
+      native window, 173 companies, add+delete round-trip, graceful quit left
+      0 electron / 0 node processes and port 3000 free.

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Agent-based CSR funding intelligence pipeline with drift detection and matching",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist-electron/main.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -21,7 +21,10 @@
     "enrich": "tsx src/index.ts --mode=enrich",
     "status": "tsx src/index.ts --mode=status",
     "migrate": "tsx scripts/migrate.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "electron:build": "tsc -p tsconfig.electron.json",
+    "electron:dev": "npm run build && npm run electron:build && electron .",
+    "electron:start": "npm run electron:build && electron ."
   },
   "dependencies": {
     "axios": "^1.7.0",
@@ -42,6 +45,9 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.2",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

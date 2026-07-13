@@ -21,3 +21,4 @@ Thumbs.db
 
 # Runtime database (SQLite single file + WAL sidecars)
 data/
+dist-electron/
