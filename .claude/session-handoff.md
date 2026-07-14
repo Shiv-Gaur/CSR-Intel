@@ -1,80 +1,73 @@
 # Session Handoff — CSR Funding Intelligence (2026-07-14)
 
 ## 1. Goal
-Two stages, both DONE: (1) repo cleanup + push to GitHub; (2) auto-update via
-electron-updater + GitHub Releases (v1.0.1). Gates: build ✅, 136/136 tests ✅.
+(1) Repo cleanup + push; (2) auto-update via electron-updater + GitHub
+Releases (v1.0.1). Both DONE, pushed: da362c7 (cleanup), 290304a (updater).
+Gates: build ✅, 136/136 tests ✅. Installer:
+release/CSR-Funding-Intelligence-Setup-1.0.1.exe (244.8 MB).
 
 ## 2. Completed (exact paths)
-- **Stage 1 cleanup** (commit da362c7, pushed): deleted dead
-  src/tools/confidence-scorer.ts + drift-compute.ts (+ their 10 tests;
-  verification/drift agents have their own inline logic), Dockerfile,
-  docker-compose.yml, deploy.sh, scripts/migrate-postgres-to-sqlite.ts,
-  scripts/dev-tools/ (4 one-shot scripts). config.ts: databaseUrl + LLM
-  fields removed. .env.example + README rewritten. Tests 146→136.
-  NOTE: coordinator.agent / schemes-seed / innovator-research /
-  innovator-import LOOK orphaned but are loaded via dynamic import()
-  (cron.ts + dashboard.ts) — never "clean them up".
-- **Stage 2 auto-update**: electron/main.ts — autoUpdater (packaged only):
-  check 10s after launch + every 4h, autoDownload, update-downloaded →
-  "Restart now/Later" dialog (Restart = stopServer() then quitAndInstall),
-  every failure caught + briefError() trims header dumps; ipcMain handlers
-  app:version + updates:check. electron/preload.cjs exposes
-  csrDesktop.{appVersion,checkForUpdates,onUpdateStatus}. dashboard.html:
-  desktop-only "Check for updates" in the gear (⚙ Our Profile) modal.
-  electron-builder.yml publish: github / Shiv-Gaur / CSR-Intel.
-  package.json: version 1.0.1, "release" script (--publish always) +
-  postrelease ABI restore.
-- **CRITICAL packaging bug found & fixed**: @electron/rebuild writes
-  build/Release/.forge-meta after the Electron-ABI rebuild; our
-  post-packaging `npm rebuild better-sqlite3` (Node-ABI restore) replaces the
-  binary but NOT the marker → the NEXT packaging run skips the rebuild as
-  "finished" and ships a Node-ABI better_sqlite3.node → packaged server
-  crashes at boot (NODE_MODULE_VERSION 127 vs 148). The first 1.0.1 build
-  shipped broken this way (window up, blank page, no server). Fixes:
-  scripts/stage-electron-assets.ts deletes the marker pre-build;
-  scripts/verify-packaged-native.ts (end of electron:dist AND release
-  chains) loads the packaged module under ELECTRON_RUN_AS_NODE — wrong ABI
-  now FAILS the build ("ABI verified" line = pass).
+- Cleanup (da362c7): DELETED src/tools/confidence-scorer.ts +
+  drift-compute.ts (+ their 2 test files; agents have own inline logic),
+  Dockerfile, docker-compose.yml, deploy.sh, scripts/dev-tools/ (4 files),
+  scripts/migrate-postgres-to-sqlite.ts. src/config.ts: databaseUrl + LLM
+  fields removed. .env.example + README.md rewritten. Tests 146→136.
+  WARNING: coordinator.agent, schemes-seed, innovator-research,
+  innovator-import LOOK orphaned but load via dynamic import() — keep.
+- Updater (290304a): electron/main.ts (autoUpdater: launch+4h checks packaged
+  only, Restart now/Later dialog, briefError() trims header dumps, ipcMain
+  app:version + updates:check); electron/preload.cjs (csrDesktop bridge);
+  src/dashboard/dashboard.html (gear-panel Check for updates, desktop-only);
+  electron-builder.yml (publish: github/Shiv-Gaur/CSR-Intel);
+  package.json (v1.0.1, "release" script --publish always + postrelease).
+- ABI guard: scripts/stage-electron-assets.ts deletes stale .forge-meta;
+  NEW scripts/verify-packaged-native.ts load-tests packaged better-sqlite3
+  under ELECTRON_RUN_AS_NODE at end of electron:dist/release.
 
-## 3. Verified live
-- Fixed 1.0.1 silent-reinstalled over **E:\DRIIV\CSR Funding Intelligence**
-  (NSIS remembered that dir — the USER manually installed 1.0.0 there;
-  do NOT uninstall it in tests). Server up in ~14s, 173/16/5 data intact
-  (userData DB at %APPDATA%\CSR Funding Intelligence survived the upgrade).
-- Update UI driven via CDP (--remote-debugging-port=9222 + puppeteer):
-  gear panel shows the button (desktop only), click → status shows the
-  update-check result, button re-enables, no crash. Feed currently 404s
-  (repo private, no releases) — i.e. the graceful-error path is what's
-  verified; the happy path needs a real published release.
-- Launch-time auto-check also verified (status text was already populated
-  before the first click).
+## 3. Decisions
+- CRITICAL BUG FOUND by installing for real: @electron/rebuild's .forge-meta
+  marker (node_modules/better-sqlite3/build/Release) survives the
+  post-packaging `npm rebuild better-sqlite3`, so every 2nd+ packaging run
+  SKIPPED the Electron-ABI rebuild and shipped Node-ABI (127 vs 148) →
+  packaged server crashed at boot (window up, blank page). First 1.0.1 build
+  shipped broken; fixed + gated. Every packaging log must show "ABI verified".
+- "release" script = full chain (build → electron:build → stage → publish
+  always → verify), NOT bare `electron-builder --publish=always` (would
+  package stale dist/).
+- Unsigned auto-update on Windows: updates do NOT retrigger SmartScreen (no
+  Mark-of-the-Web on electron-updater's own downloads; unsigned apps skip the
+  signature-match check). Only the first browser download warns. This is
+  documented behaviour — full round-trip NOT yet tested (needs 2 releases).
+- User's REAL install is E:\DRIIV\CSR Funding Intelligence (they installed
+  1.0.0 manually there; NSIS remembers the dir). Never uninstall it in tests.
+  Currently on fixed 1.0.1, verified healthy (173 companies, ~14s startup).
+- Verified live via CDP (--remote-debugging-port=9222 + puppeteer): gear
+  button visible only in desktop shell, click → status text, re-enables,
+  graceful 404 handling; launch-time auto-check also fired.
 
-## 4. Facts that surprised us (keep)
-- **Repo github.com/Shiv-Gaur/CSR-Intel is PRIVATE** (anon API 404s).
-  Auto-update CANNOT work for end users until it's made public (GitHub
-  provider needs an anonymous-readable feed). gh CLI is not authed on this
-  machine; the user must flip visibility themselves.
-- Unsigned auto-update on Windows: SmartScreen only fires on
-  Mark-of-the-Web (browser downloads) → first manual installer download
-  warns; electron-updater's own downloads have no MotW → updates apply
-  silently. Unsigned apps skip electron-updater's signature match. Verified
-  only by documentation/design, NOT by a full release round-trip yet.
-- An orphaned `tsx src/index.ts` held port 3000 again mid-session (killed).
+## 4. In progress
+Nothing half-done. Working tree clean, main in sync with origin. App closed,
+port 3000 free. Memory csr-db-environment.md updated (SQLite, E:\DRIIV,
+private repo, ABI trap).
 
-## 5. Next steps
-1. USER: make the repo public (Settings → General → Danger Zone) — auto-update
-   is dead until then.
-2. USER: generate GH_TOKEN (fine-grained, Contents read+write on CSR-Intel),
-   then `npm run release` publishes the draft; publish the draft on GitHub.
-3. Bump to 1.0.2 later and do a REAL update round-trip test (install 1.0.1,
-   release 1.0.2, watch it self-update).
-4. Still open from the old tracker: financial data extraction
-   (revenue/net profit/CSR budget) — estimateSpendFromProfit in inference.ts.
-5. Optional: code-signing cert (kills SmartScreen), package.json "author"
-   field (electron-builder warning).
+## 5. Next steps (first prompts for next session)
+1. After the user makes the repo public + sets GH_TOKEN: "Run npm run release
+   to publish 1.0.1, then bump to 1.0.2 and do a real update round-trip test
+   on the E:\DRIIV install" — closes the only untested link.
+2. "Build financial data extraction (revenue, net profit, CSR budget)" — last
+   open tracker item; estimateSpendFromProfit in src/utils/inference.ts.
+3. "Add official websites for remaining ~140 companies to
+   src/tools/known-urls.ts" — widens tier-1 contact coverage (~31 have domains).
 
 ## 6. Blockers (need human input)
-- Repo visibility + GH_TOKEN (above) — both are account-level actions.
+- Repo github.com/Shiv-Gaur/CSR-Intel is PRIVATE (anon API 404s) —
+  auto-update feed is dead for users until the USER flips visibility
+  (Settings → General → Danger Zone). gh CLI unauthenticated here.
+- GH_TOKEN needed for `npm run release` (fine-grained PAT, Contents
+  read+write on CSR-Intel). Steps documented in README.md.
+- Installer unsigned → SmartScreen on first browser download; needs a
+  code-signing cert to remove.
 - Search-free mode still on; SBI/HDFC-class bot walls beat even Puppeteer.
-- No hot reload: restart `npm run dev` after src edits; kill port-3000
-  process first (Get-NetTCPConnection -LocalPort 3000).
+- No hot reload: restart `npm run dev` after src edits; kill the port-3000
+  PID first (Get-NetTCPConnection -LocalPort 3000) — orphaned tsx children
+  recur, and the Electron shell silently attaches to any port-3000 server.
