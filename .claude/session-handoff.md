@@ -42,6 +42,14 @@ https://github.com/Shiv-Gaur/CSR-Intel (main). Gates: build ✅, 146/146 tests �
   not machine-verifiable; the per-contact "Report incorrect" override is the fix.
 - SBI/ONGC sites resist even the browser (404 conventional paths, /web/ URL
   scheme, bot walls) — their contacts stay wikipedia+Unverified, honestly.
+- Recommendation given & accepted implicitly: fallback stays ON everywhere
+  (threshold-gated, ~+40s/company, full run ~4.6h overnight is fine); if
+  frequent automated refreshes are added later, give the cron path deep:false
+  and keep the browser for official-site contacts / manual adds / a "Deep
+  Research" button.
+- Noise killed this phase (all tested): "Y.K. Hamied Incorporated",
+  "Idiopathic Pulmonary Fibrosis Contact", "Disclosure Investors",
+  "Mauritius Operations", "Head OfficePlot No." (mid-word-capital seam rule).
 
 ## 4. In progress
 Nothing half-done. Port 3000 free (Electron quit test was last). DB is SQLite
