@@ -41,6 +41,15 @@ extraResources:
 # the Node ABI for dev/tests (the postelectron:dist script does it).
 npmRebuild: true
 
+# Auto-update feed: electron-updater checks GitHub Releases of this repo.
+# `npm run release` (--publish always) uploads the installer + latest.yml
+# there; needs a GH_TOKEN env var with repo write access. electron:dist
+# keeps --publish never, so normal builds can never publish by accident.
+publish:
+  provider: github
+  owner: Shiv-Gaur
+  repo: CSR-Intel
+
 win:
   target: nsis
   icon: electron/icon.ico

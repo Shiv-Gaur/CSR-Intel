@@ -1,7 +1,7 @@
 {
   "name": "csr-funding-intelligence",
   "productName": "CSR Funding Intelligence",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Agent-based CSR funding intelligence pipeline with drift detection and matching",
   "type": "module",
   "main": "dist-electron/main.js",
@@ -26,14 +26,17 @@
     "electron:build": "tsc -p tsconfig.electron.json",
     "electron:dev": "npm run build && npm run electron:build && electron .",
     "electron:start": "npm run electron:build && electron .",
-    "electron:dist": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish never",
-    "postelectron:dist": "npm rebuild better-sqlite3"
+    "electron:dist": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish never && tsx scripts/verify-packaged-native.ts",
+    "postelectron:dist": "npm rebuild better-sqlite3",
+    "release": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish always && tsx scripts/verify-packaged-native.ts",
+    "postrelease": "npm rebuild better-sqlite3"
   },
   "dependencies": {
     "axios": "^1.7.0",
     "better-sqlite3": "^12.11.1",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.0",
+    "electron-updater": "^6.8.9",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "p-queue": "^9.3.0",

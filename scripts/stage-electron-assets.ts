@@ -66,5 +66,25 @@ async function stageSeedDb(): Promise<void> {
   }
 }
 
+/**
+ * Force a REAL Electron-ABI rebuild of better-sqlite3.
+ *
+ * @electron/rebuild writes a `.forge-meta` marker after building and skips
+ * the module whenever the marker is present — but `npm rebuild better-sqlite3`
+ * (our post-packaging Node-ABI restore) replaces the binary WITHOUT removing
+ * the marker. The second packaging run then "finishes" the rebuild as a no-op
+ * and ships a Node-ABI binary that crashes the packaged app at boot
+ * (NODE_MODULE_VERSION 127 vs 148). Deleting the marker makes every packaging
+ * run rebuild for real (prebuilt download — seconds, no compiler needed).
+ */
+function clearStaleRebuildMarker(): void {
+  const marker = path.join(ROOT, 'node_modules', 'better-sqlite3', 'build', 'Release', '.forge-meta');
+  if (fs.existsSync(marker)) {
+    fs.rmSync(marker);
+    console.log('Removed stale @electron/rebuild marker (better-sqlite3 will rebuild for the Electron ABI)');
+  }
+}
+
 await stageChromium();
 await stageSeedDb();
+clearStaleRebuildMarker();

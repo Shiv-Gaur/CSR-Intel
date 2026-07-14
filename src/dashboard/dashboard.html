@@ -234,6 +234,11 @@
         <div class="fgroup"><label class="h">Sectors we target</label><div class="checkgrid" id="sectorGrid"></div></div>
         <div class="fgroup"><label class="h">Target states / UTs</label><div class="checkgrid geo" id="geoGrid"></div></div>
         <div class="fgroup"><label class="h">Keywords</label><div class="taginput" id="kwInput"><input type="text" placeholder="Type and press Enter… e.g. solar, water, girls"></div></div>
+        <div class="fgroup" id="updateGroup" style="display:none"><label class="h">Desktop app</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="updateCheckBtn">Check for updates</button>
+            <span class="hint" id="updateStatus" style="margin:0"></span>
+          </div></div>
       </div>
       <div class="mfoot"><button id="profileCancel">Cancel</button><button class="primary" id="profileSave">Save Profile</button></div>
     </div>
@@ -1244,6 +1249,16 @@
     document.getElementById('profileCancel').addEventListener('click',closeProfile);
     document.getElementById('profileSave').addEventListener('click',saveProfile);
     document.getElementById('profileModal').addEventListener('click',function(e){ if(e.target===this)closeProfile(); });
+
+    // ─── Desktop auto-update (visible only inside the Electron shell) ────────
+    if(window.csrDesktop&&window.csrDesktop.checkForUpdates){
+      document.getElementById('updateGroup').style.display='';
+      var updStatus=document.getElementById('updateStatus');
+      if(window.csrDesktop.appVersion){ window.csrDesktop.appVersion().then(function(v){ updStatus.textContent='Installed version: '+v; }).catch(function(){}); }
+      if(window.csrDesktop.onUpdateStatus){ window.csrDesktop.onUpdateStatus(function(text){ updStatus.textContent=text; }); }
+      document.getElementById('updateCheckBtn').addEventListener('click',function(){ var b=this; b.disabled=true; updStatus.textContent='Checking…';
+        window.csrDesktop.checkForUpdates().then(function(msg){ updStatus.textContent=msg; }).catch(function(){ updStatus.textContent='Update check failed.'; }).then(function(){ b.disabled=false; }); });
+    }
 
     // ─── Manual CRUD ─────────────────────────────────────────────────────────
     function openAdd(){ document.getElementById('addName').value=''; var st=document.getElementById('addStatus'); st.style.display='none'; st.textContent=''; document.getElementById('addModal').classList.add('show'); setTimeout(function(){document.getElementById('addName').focus();},50); }

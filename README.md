@@ -133,6 +133,54 @@ Packaging notes:
 - The installer is currently **unsigned** — Windows SmartScreen will warn on
   machines that download it. A code-signing certificate fixes this.
 
+## Releases & auto-update
+
+The installed app updates itself from **GitHub Releases** of this repo
+(`electron-updater`): it checks on launch and every 4 hours, downloads in the
+background, then offers "Restart now / Later" (Later = the update applies on
+the next launch). Failed checks — offline, no releases yet — are logged and
+never crash the app. There is also a manual **Check for updates** button in
+the dashboard's gear (⚙) panel, visible only inside the desktop app.
+
+### Publishing a release, step by step
+
+1. **One-time: create a GitHub token.** GitHub → Settings → Developer
+   settings → Personal access tokens → *Fine-grained tokens* → Generate new
+   token; scope it to the `Shiv-Gaur/CSR-Intel` repository with
+   **Read and write** permission on **Contents**. (A classic token with the
+   `repo` scope also works.) Keep it secret — anyone holding it can write to
+   the repo.
+2. Bump `"version"` in `package.json` (e.g. `1.0.1` → `1.0.2`) and commit.
+   electron-updater only offers versions *greater* than the installed one.
+3. Build and publish:
+
+   ```powershell
+   $env:GH_TOKEN = "<your token>"    # current shell only — do NOT commit it
+   npm run release
+   ```
+
+   This runs the same chain as `electron:dist` but ends with
+   `electron-builder --win --publish always`, which uploads the installer,
+   the `.blockmap` (delta-download support), and `latest.yml` (the update
+   manifest electron-updater polls) to a **draft** GitHub release named after
+   the version.
+4. Open the repo's Releases page, review the draft, and **publish** it.
+   Installed apps pick the update up on their next check (≤ 4 h, or
+   immediately via the gear-panel button).
+
+### Unsigned auto-update behaviour on Windows (honest notes)
+
+- SmartScreen's "unknown publisher" warning is triggered by the
+  **Mark-of-the-Web** on files downloaded by a browser. It hits the *first
+  manual download* of the installer from the Releases page.
+- **Auto-updates do not retrigger SmartScreen**: electron-updater downloads
+  the new installer itself (no Mark-of-the-Web) and runs it directly.
+  Because the app is unsigned, electron-updater also skips its
+  publisher-signature match check rather than blocking the update.
+- Residual risk of unsigned builds: aggressive antivirus products can still
+  quarantine unsigned executables on heuristics, and users must click through
+  SmartScreen once at initial install. Code signing removes both.
+
 ## Conventions
 
 See `CLAUDE.md` for the full code rules. Highlights: ESM only, no `any`, Zod for all

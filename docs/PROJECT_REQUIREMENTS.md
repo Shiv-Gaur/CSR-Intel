@@ -212,3 +212,32 @@
       THE SHORTCUT → 173 companies served by the installed exe → graceful
       close (0 leftover processes, port free) → silent uninstall removed
       dir/shortcuts/registry (user DB preserved by design).
+- [x] Repo cleanup + public-push prep — DONE 2026-07-14. Deleted dead
+      confidence-scorer.ts + drift-compute.ts (+10 tests — superseded
+      duplicates; verification/drift agents ship their own inline logic),
+      docker-era Dockerfile/docker-compose.yml/deploy.sh, one-shot
+      scripts/dev-tools/ + migrate-postgres-to-sqlite.ts; dead config fields
+      (databaseUrl, LLM trio) removed; .env.example + README rewritten to
+      match reality. Verified alive-via-dynamic-import before deleting:
+      coordinator.agent, schemes-seed, innovator-research, innovator-import.
+      Tests 146→136 green. Pushed to github.com/Shiv-Gaur/CSR-Intel main.
+- [x] Auto-update (electron-updater ← GitHub Releases) — DONE 2026-07-14,
+      v1.0.1. main.ts: checks on launch + every 4h (packaged only), background
+      download, "Restart now/Later" dialog on update-downloaded, all failures
+      caught (never crash — verified live against a 404 feed). Gear panel:
+      desktop-only "Check for updates" button + status line (IPC via
+      preload.cjs contextBridge). electron-builder publish: github/Shiv-Gaur/
+      CSR-Intel; `npm run release` (--publish always, GH_TOKEN-gated, uploads
+      draft release + latest.yml). CRITICAL FIX found by testing the real
+      installer: @electron/rebuild's .forge-meta marker survived the post-
+      build Node-ABI restore, so the 2nd+ packaging run shipped a Node-ABI
+      better-sqlite3 that crashed the packaged server at boot
+      (NODE_MODULE_VERSION 127 vs 148). stage-electron-assets now deletes the
+      marker; scripts/verify-packaged-native.ts loads the packaged module
+      under ELECTRON_RUN_AS_NODE at the end of every electron:dist/release —
+      wrong ABI now fails the build. UI flow verified via CDP-driven click in
+      the installed app. KNOWN GAPS: repo is currently PRIVATE (updater feed
+      404s for users — must be made public), installer unsigned (SmartScreen
+      on first browser download; auto-updates themselves bypass SmartScreen —
+      no Mark-of-the-Web), full update round-trip untested until a real
+      GitHub release exists.
