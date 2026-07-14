@@ -192,3 +192,23 @@
       nav words, DOM-seam glue (mid-word capital check, Mc/Mac excepted).
       Electron verified: quit mid-enrichment with 10 live Chromium processes →
       0 electron / 0 node / 0 chromium left, port free.
+- [x] PHASE 4: Windows installer (electron-builder / NSIS) — DONE 2026-07-13.
+      release/CSR-Funding-Intelligence-Setup-1.0.0.exe (244.6 MB; 856 MB
+      installed — Electron + bundled Chromium dominate). Build:
+      `npm run electron:dist` (tsc → tsc electron → stage-electron-assets →
+      electron-builder). Packaged server child runs under ELECTRON_RUN_AS_NODE
+      (target machines have no Node); better-sqlite3 auto-rebuilt for the
+      Electron 43 ABI by electron-builder (prebuilt binary, no compile), then
+      `postelectron:dist` restores the Node ABI for dev/tests. Puppeteer's
+      Chromium (win64-150.0.7871.24, ~415 MB) staged from the local cache
+      (skip-if-same-version marker) into resources/chrome and wired via
+      PUPPETEER_EXECUTABLE_PATH → config.puppeteerExecutablePath. Seed data
+      bundled: consistent snapshot of data/csr-intel.db (189 entities incl.
+      173 companies + 16 schemes, 5 innovators) copied to userData on first
+      run; empty-DB fallback still works (migrations run at boot). NSIS
+      assisted installer, per-user or all-users (Program Files) choice,
+      Desktop + Start Menu shortcuts. VERIFIED END-TO-END on this machine:
+      silent install → shortcuts + Add/Remove entry present → launched FROM
+      THE SHORTCUT → 173 companies served by the installed exe → graceful
+      close (0 leftover processes, port free) → silent uninstall removed
+      dir/shortcuts/registry (user DB preserved by design).

@@ -1,5 +1,6 @@
 {
   "name": "csr-funding-intelligence",
+  "productName": "CSR Funding Intelligence",
   "version": "1.0.0",
   "description": "Agent-based CSR funding intelligence pipeline with drift detection and matching",
   "type": "module",
@@ -24,7 +25,9 @@
     "test": "vitest run",
     "electron:build": "tsc -p tsconfig.electron.json",
     "electron:dev": "npm run build && npm run electron:build && electron .",
-    "electron:start": "npm run electron:build && electron ."
+    "electron:start": "npm run electron:build && electron .",
+    "electron:dist": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish never",
+    "postelectron:dist": "npm rebuild better-sqlite3"
   },
   "dependencies": {
     "axios": "^1.7.0",

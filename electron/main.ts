@@ -82,7 +82,21 @@ async function startServer(): Promise<void> {
   const sqlitePath = resolveSqlitePath();
   if (sqlitePath) env.SQLITE_PATH = sqlitePath;
 
-  serverChild = spawn('node', [serverEntry], {
+  // Packaged machines have no `node` on PATH — run the app's own Electron
+  // binary as Node (ELECTRON_RUN_AS_NODE). This is also why electron-builder
+  // rebuilds better-sqlite3 for the Electron ABI at package time: the child
+  // shares Electron's NODE_MODULE_VERSION, not the system Node's.
+  let nodeBin = 'node';
+  if (app.isPackaged) {
+    nodeBin = process.execPath;
+    env.ELECTRON_RUN_AS_NODE = '1';
+    // Bundled Chromium for the Puppeteer fallback (a fresh machine has no
+    // ~/.cache/puppeteer). browser-fetcher reads this through config.ts.
+    const bundledChrome = path.join(process.resourcesPath, 'chrome', 'chrome-win64', 'chrome.exe');
+    if (fs.existsSync(bundledChrome)) env.PUPPETEER_EXECUTABLE_PATH = bundledChrome;
+  }
+
+  serverChild = spawn(nodeBin, [serverEntry], {
     cwd: PROJECT_ROOT,
     env,
     stdio: 'inherit',

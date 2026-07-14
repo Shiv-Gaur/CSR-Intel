@@ -27,6 +27,10 @@ const configSchema = z.object({
   serperApiKey: z.string().default(''),
   braveSearchApiKey: z.string().default(''),
 
+  // Browser fallback — packaged builds bundle Chromium and point here; empty
+  // means "let puppeteer resolve its own cache" (dev default).
+  puppeteerExecutablePath: z.string().default(''),
+
   // Concurrency
   concurrencyDiscovery: z.coerce.number().default(2),
   concurrencyEnrichment: z.coerce.number().default(2),
@@ -65,6 +69,7 @@ function loadConfig(): Config {
     llmApiKey: process.env.LLM_API_KEY,
     serperApiKey: process.env.SERPER_API_KEY,
     braveSearchApiKey: process.env.BRAVE_SEARCH_API_KEY,
+    puppeteerExecutablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
     concurrencyDiscovery: process.env.CONCURRENCY_DISCOVERY,
     concurrencyEnrichment: process.env.CONCURRENCY_ENRICHMENT,
     concurrencyVerification: process.env.CONCURRENCY_VERIFICATION,

@@ -1,0 +1,57 @@
+# PHASE 4 — Windows installer packaging.
+# Build with: npm run electron:dist
+#
+# asar is OFF deliberately: the server runs as an ELECTRON_RUN_AS_NODE child
+# that loads native modules (better-sqlite3) and spawns pino-pretty transport
+# worker threads — plain files sidestep every asar edge case at a small size
+# cost (NSIS compresses the lot anyway).
+appId: com.driiv.csr-funding-intelligence
+productName: CSR Funding Intelligence
+copyright: DRIIV
+
+directories:
+  output: release
+
+asar: false
+
+# Production node_modules are added automatically; this list covers the app
+# code. Source .ts, tests, .git etc. are excluded by not being listed.
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - src/dashboard/dashboard.html
+  - src/dashboard/assets/**/*
+  - electron/preload.cjs
+  - electron/icon.ico
+  - "!**/*.ts"
+  - "!**/*.map"
+
+extraResources:
+  # First-run seed DB — copied to userData by electron/main.ts if absent.
+  - from: build/seed/csr-intel.db
+    to: csr-intel.db
+  # Bundled Chromium for the Puppeteer JS-render fallback (fresh machines
+  # have no ~/.cache/puppeteer). main.ts sets PUPPETEER_EXECUTABLE_PATH.
+  - from: build/chromium/chrome-win64
+    to: chrome/chrome-win64
+
+# Rebuilds native deps (better-sqlite3) against the Electron ABI — required
+# because the packaged server child runs under ELECTRON_RUN_AS_NODE.
+# NOTE: this mutates local node_modules; `npm rebuild better-sqlite3` restores
+# the Node ABI for dev/tests (the postelectron:dist script does it).
+npmRebuild: true
+
+win:
+  target: nsis
+  icon: electron/icon.ico
+
+nsis:
+  oneClick: false
+  # perMachine false + assisted installer → the user picks "all users"
+  # (Program Files, needs admin) or "only me" (per-user, no elevation).
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: CSR Funding Intelligence
+  artifactName: CSR-Funding-Intelligence-Setup-${version}.${ext}

@@ -1,71 +1,75 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-13)
+# Session Handoff — CSR Funding Intelligence (2026-07-13, PHASE 4)
 
 ## 1. Goal
-Phases 1-3 of the platform rework: (1) PostgreSQL → SQLite, (2) Electron desktop
-shell, (3) Puppeteer JS-render fallback. All DONE, verified, pushed to
-https://github.com/Shiv-Gaur/CSR-Intel (main). Gates: build ✅, 146/146 tests ✅.
+PHASE 4: single distributable Windows installer. DONE and verified end-to-end
+(install → shortcut launch → seeded data → clean uninstall). Gates: build ✅,
+146/146 tests ✅.
 
 ## 2. Completed (exact paths)
-- **PHASE 1**: src/db/sqlite.ts (better-sqlite3, WAL, ./data/csr-intel.db,
-  SQLITE_PATH override; pg-shaped query() facade; central JSON (de)serialise);
-  src/db/index.ts rewritten; every query converted (json_patch/json_extract/
-  json_each; datetime modifiers; aliased COUNT(*)). Data migrated via
-  scripts/migrate-postgres-to-sqlite.ts — entities 189 (173 companies + 16
-  schemes), innovators 5, task_queue 2076, change_history 74, human_review 260,
-  match_profile 1 — ALL COUNTS MATCHED. pg removed. Postgres docker untouched
-  as backup. data/ gitignored.
-- **PHASE 2**: electron/main.ts (server as `node dist/index.js` CHILD — no
-  better-sqlite3 ABI rebuild; child kill stops server+workers+cron; single-
-  instance lock; attach mode if port 3000 already served); electron/preload.cjs
-  (sandbox needs CJS); electron/icon.ico (DRIIV seal via png-to-ico);
-  packaged mode: SQLITE_PATH → app.getPath('userData'). Scripts: electron:dev/
-  electron:start/electron:build (tsconfig.electron.json → dist-electron/).
-- **PHASE 3**: src/tools/browser-fetcher.ts (shared headless Chromium, queue
-  concurrency 2, resource blocking, 8s nav/15s protocol/20s hard cap, 45s idle
-  close, exit hooks); fallback wiring in src/tools/free-sources.ts (<200 chars,
-  skip bse/nse JSON APIs) + src/tools/official-site.ts. Extractor hardening for
-  rendered-page noise (NAME_STOPWORDS additions + mid-word-capital DOM-seam
-  check in src/utils/extractor.ts).
-- Earlier same day: contact integrity (LinkedIn ban, nw18 boilerplate purge,
-  PSU board pages, manual overrides), DRIIV logo header (dark bar, cropped
-  1024x300 asset at src/dashboard/assets/logo.png, GET /assets/logo.png).
+- **Installer**: release/CSR-Funding-Intelligence-Setup-1.0.0.exe — 244.6 MB
+  (856 MB installed; Electron runtime + bundled Chromium dominate). Build with
+  `npm run electron:dist`.
+- **electron-builder.yml**: NSIS assisted installer (oneClick:false,
+  perMachine:false → user picks per-user or all-users/Program Files),
+  Desktop + Start Menu shortcuts, asar:false (deliberate — the
+  ELECTRON_RUN_AS_NODE child + better-sqlite3 + pino-pretty transport worker
+  threads all want plain files), output release/.
+- **scripts/stage-electron-assets.ts** (runs inside electron:dist): copies the
+  active Puppeteer Chromium (win64-150.0.7871.24, ~415 MB) from
+  ~/.cache/puppeteer to build/chromium (SKIPPED when .version marker matches —
+  no re-copy, and Puppeteer itself never re-downloads a cached browser);
+  snapshots data/csr-intel.db via better-sqlite3 backup() (WAL-safe) to
+  build/seed/ — bundled as first-run seed (189 entities = 173 companies +
+  16 schemes, 5 innovators).
+- **electron/main.ts**: packaged mode now spawns the server as
+  `process.execPath` + ELECTRON_RUN_AS_NODE=1 (target machines have no Node;
+  dev still uses plain `node`); sets PUPPETEER_EXECUTABLE_PATH to
+  resources/chrome/chrome-win64/chrome.exe when bundled.
+- **src/config.ts** `puppeteerExecutablePath` (env PUPPETEER_EXECUTABLE_PATH) →
+  **src/tools/browser-fetcher.ts** passes it as launch executablePath (empty in
+  dev = puppeteer cache as before).
+- **package.json**: productName "CSR Funding Intelligence" (also names the
+  userData dir), scripts electron:dist + postelectron:dist
+  (`npm rebuild better-sqlite3` — electron-builder's npmRebuild switches local
+  node_modules to the Electron ABI; the post script restores Node ABI so
+  dev/tests keep working. If electron-builder FAILS mid-run, run the rebuild
+  manually).
+- **.gitignore**: build/, release/.
 
-## 3. Decisions
-- Server ALWAYS a child process under Electron (ABI + lifecycle); Chromium dies
-  with the child — verified: quit mid-enrichment with 10 live chrome.exe → zero
-  orphans, port free.
-- Browser fallback is threshold-gated (fires only on <200-char fetches), never
-  a replacement; hdfcbank.com forced the 20s hard cap (protocol stalls at 146s).
-- 10-company fallback run: 10/10 companies triggered it (~4-5 fetches each,
-  mean 3.8s/fetch); ~96s/company vs 57s cheerio-only (~4.6h vs 2.7h for 173).
-- Tier-1 pages can still name SUBSIDIARY heads (BoB "Samir Bhupendra Shah") —
-  not machine-verifiable; the per-contact "Report incorrect" override is the fix.
-- SBI/ONGC sites resist even the browser (404 conventional paths, /web/ URL
-  scheme, bot walls) — their contacts stay wikipedia+Unverified, honestly.
-- Recommendation given & accepted implicitly: fallback stays ON everywhere
-  (threshold-gated, ~+40s/company, full run ~4.6h overnight is fine); if
-  frequent automated refreshes are added later, give the cron path deep:false
-  and keep the browser for official-site contacts / manual adds / a "Deep
-  Research" button.
-- Noise killed this phase (all tested): "Y.K. Hamied Incorporated",
-  "Idiopathic Pulmonary Fibrosis Contact", "Disclosure Investors",
-  "Mauritius Operations", "Head OfficePlot No." (mid-word-capital seam rule).
+## 3. Verified live (this machine)
+- Silent per-user install (/S): install dir
+  %LOCALAPPDATA%\Programs\CSR Funding Intelligence, Desktop + Start Menu
+  shortcuts, HKCU Add/Remove entry — all present.
+- Launched FROM the Start Menu shortcut: installed exe owned port 3000
+  (server child under ELECTRON_RUN_AS_NODE), /api/stats returned 173
+  companies / 16 schemes / 5 innovators; seed DB copied on first run to
+  %APPDATA%\CSR Funding Intelligence\csr-intel.db (2.1 MB).
+- Graceful window close: 0 leftover processes, port 3000 free.
+- Silent uninstall via the registered uninstaller (what Add/Remove Programs
+  runs): dir, both shortcuts, registry entry all removed; userData DB
+  intentionally preserved (reinstall keeps user edits — first-run copy only
+  fires when the DB is absent).
+- better-sqlite3 Electron-ABI rebuild used a PREBUILT binary (electron 43.1.0,
+  buildFromSource=false) — no VS toolchain needed at package time.
 
 ## 4. In progress
-Nothing half-done. Port 3000 free (Electron quit test was last). DB is SQLite
-at ./data/csr-intel.db — docker csr-postgres is a STALE backup as of 2026-07-13.
+Nothing half-done. The app is currently UNINSTALLED (that was the test);
+run the installer from release/ to put it back. Port 3000 free. NOTE: an
+orphaned `tsx src/index.ts` dev server (the known pitfall) was found holding
+port 3000 mid-session and killed.
 
 ## 5. Next steps (suggested first prompts)
-1. "Package the Electron app with electron-builder (installer, bundled DB
-   snapshot, icon)" — natural PHASE 4; main.ts already handles userData DB.
-2. "Build financial data extraction (revenue, net profit, CSR budget)" — the
-   last old tracker item; estimateSpendFromProfit in src/utils/inference.ts.
-3. "Add official websites for remaining ~140 companies to known-urls.ts" —
+1. "Build financial data extraction (revenue, net profit, CSR budget)" — the
+   LAST open tracker item; estimateSpendFromProfit in src/utils/inference.ts.
+2. "Add official websites for remaining ~140 companies to known-urls.ts" —
    widens tier-1 contact coverage (only ~31 have domains).
+3. Optional installer polish: code signing (currently unsigned → SmartScreen
+   warning on other machines), app icon author field ("author is missed in
+   package.json" builder warning), auto-update via electron-updater.
 
 ## 6. Blockers (need human input)
+- Installer is UNSIGNED — Windows SmartScreen will warn on machines that
+  download it; needs a code-signing cert to fix.
 - Search-free mode still on; SBI/HDFC-class bot walls beat even Puppeteer.
-- Docker Postgres only needed if re-running the one-time migration (needs
-  `npm i pg` again).
 - No hot reload: restart `npm run dev` after src edits; kill port-3000 process
   first (Get-NetTCPConnection -LocalPort 3000).

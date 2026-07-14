@@ -17,6 +17,7 @@
  */
 import puppeteer, { type Browser } from 'puppeteer';
 import PQueue from 'p-queue';
+import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
 const USER_AGENT =
@@ -39,6 +40,9 @@ async function getBrowser(): Promise<Browser> {
   if (!launching) {
     launching = puppeteer.launch({
       headless: true,
+      // Packaged builds ship Chromium in resources/ (no puppeteer cache on a
+      // fresh machine); dev leaves this empty and uses the normal cache.
+      ...(config.puppeteerExecutablePath ? { executablePath: config.puppeteerExecutablePath } : {}),
       // Default protocolTimeout is 180s — a bot-walled site that keeps the page
       // in navigation limbo (HDFC/Akamai) made page.evaluate hang ~146s per
       // fetch. Cap CDP calls hard; HARD_CAP_MS below bounds the whole fetch.
