@@ -45,10 +45,14 @@ npmRebuild: true
 # `npm run release` (--publish always) uploads the installer + latest.yml
 # there; needs a GH_TOKEN env var with repo write access. electron:dist
 # keeps --publish never, so normal builds can never publish by accident.
+# releaseType: release publishes a LIVE release directly (electron-updater
+# ignores drafts, so the default `draft` left updates undetectable until
+# manually published — 2026-07-22).
 publish:
   provider: github
   owner: Shiv-Gaur
   repo: CSR-Intel
+  releaseType: release
 
 win:
   target: nsis
