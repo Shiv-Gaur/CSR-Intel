@@ -23,7 +23,7 @@ const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
   'Accept-Language': 'en-US,en;q=0.9',
 };
-const TIMEOUT = 12000;
+const TIMEOUT = 15000; // was 12000 — IndiaCSR measured ~8.6s and occasionally timed out
 
 const clean = (s: unknown): string => String(s ?? '').replace(/\s+/g, ' ').trim();
 export const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -75,11 +75,14 @@ function scrapeTitles(html: string, source: string, selectors: string[], limit =
   return leads;
 }
 
-/** IndiaCSR ?s= search (WordPress) — article headlines as leads. */
+/** IndiaCSR ?s= search (WordPress) — article headlines as leads.
+ *  IndiaCSR runs the JNews/Jeg theme: result titles are `h3.jeg_post_title a`.
+ *  The legacy entry-title/bookmark selectors are kept as fallbacks in case the
+ *  theme changes again or a source shares scrapeTitles. */
 export async function searchIndiaCsr(q: string): Promise<SearchLead[]> {
   const url = `https://indiacsr.in/?s=${encodeURIComponent(q)}`;
   const { data } = await axios.get(url, { headers: HEADERS, timeout: TIMEOUT, responseType: 'text' });
-  return scrapeTitles(String(data), 'IndiaCSR', ['h2.entry-title a', 'h3.entry-title a', '.post-title a', 'article a[rel="bookmark"]']);
+  return scrapeTitles(String(data), 'IndiaCSR', ['.jeg_post_title a', 'h2.entry-title a', 'h3.entry-title a', '.post-title a', 'article a[rel="bookmark"]']);
 }
 
 /** YourStory search — startup-focused editorial. */
