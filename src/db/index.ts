@@ -2,6 +2,7 @@ import { getDb, query as sqliteQuery, transaction, uuid, closeDb, SQL_NOW, type 
 import { logger } from '../utils/logger.js';
 import { computeProfileMatch } from '../utils/match.js';
 import { computeInnovatorSustainability } from '../utils/sustainability.js';
+import { DOMAIN_LABELS } from '../utils/innovator-match.js';
 import type { CompanyEntity, Task, ChangeHistoryEntry } from '../types/index.js';
 
 // ─── pg-compatible facade ─────────────────────────────────────────────────────
@@ -140,9 +141,49 @@ export async function runMigrations(): Promise<void> {
         team_size INTEGER,
         patents_filed INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
+        robustness_logistics TEXT NOT NULL DEFAULT 'unknown',
+        robustness_geographic_scalability TEXT NOT NULL DEFAULT 'unknown',
+        indigenous_tech INTEGER,
+        govt_mission_alignment TEXT NOT NULL DEFAULT '[]',
+        subsidy_land_electricity TEXT NOT NULL DEFAULT '{}',
+        capex_subsidy_available INTEGER,
+        capex_subsidy_notes TEXT,
+        opex_subsidy_available INTEGER,
+        opex_subsidy_notes TEXT,
         data TEXT NOT NULL DEFAULT '{}',
         created_at TEXT ${now},
         last_updated_at TEXT ${now}
+      )
+    `);
+
+    // ── Innovator feasibility columns (added 2026-07-21) ──────────────────────
+    // ALTER for DBs created before these columns existed. SQLite has no
+    // "ADD COLUMN IF NOT EXISTS", so probe PRAGMA table_info first.
+    const innovatorCols = new Set(
+      (db.prepare(`PRAGMA table_info(innovators)`).all() as Array<{ name: string }>).map(c => c.name));
+    const addCol = (name: string, ddl: string) => {
+      if (!innovatorCols.has(name)) db.exec(`ALTER TABLE innovators ADD COLUMN ${ddl}`);
+    };
+    addCol('robustness_logistics', `robustness_logistics TEXT NOT NULL DEFAULT 'unknown'`);
+    addCol('robustness_geographic_scalability', `robustness_geographic_scalability TEXT NOT NULL DEFAULT 'unknown'`);
+    addCol('indigenous_tech', `indigenous_tech INTEGER`);
+    addCol('govt_mission_alignment', `govt_mission_alignment TEXT NOT NULL DEFAULT '[]'`);
+    addCol('subsidy_land_electricity', `subsidy_land_electricity TEXT NOT NULL DEFAULT '{}'`);
+    addCol('capex_subsidy_available', `capex_subsidy_available INTEGER`);
+    addCol('capex_subsidy_notes', `capex_subsidy_notes TEXT`);
+    addCol('opex_subsidy_available', `opex_subsidy_available INTEGER`);
+    addCol('opex_subsidy_notes', `opex_subsidy_notes TEXT`);
+
+    // ── Cross-entity full-text search (FTS5) — Stage 2 ────────────────────────
+    // Standalone (non-external-content) FTS index over companies + schemes +
+    // innovators, repopulated on demand (see rebuildSearchIndex). FTS5 ships
+    // enabled in better-sqlite3's bundled SQLite.
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
+        entity_type UNINDEXED,
+        entity_id UNINDEXED,
+        name,
+        body
       )
     `);
 
@@ -206,6 +247,20 @@ export async function updateEntityData(id: string, data: Record<string, unknown>
   );
 }
 
+/** How many OTHER entities currently carry this exact "latest" CSR spend figure.
+ *  Boilerplate leaking from a shared source page shows up as the same figure on
+ *  many unrelated companies (the 44.44-Cr incident) — callers log 3+ repeats as
+ *  suspicious instead of silently accepting them. */
+export async function countEntitiesWithSpendValue(valueCr: number, excludeId: string): Promise<number> {
+  const { rows } = await getPool().query(
+    `SELECT COUNT(*) AS n FROM entities
+     WHERE id != $1
+       AND CAST(json_extract(data, '$.csr_spend_cr.value.latest') AS REAL) = CAST($2 AS REAL)`,
+    [excludeId, valueCr]
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 export async function updateDriftScores(id: string, scores: object): Promise<void> {
   await getPool().query(
     'UPDATE entities SET drift_scores = $1, updated_at = NOW() WHERE id = $2',
@@ -238,6 +293,24 @@ export async function claimNextTask(type: string): Promise<Task | null> {
     )
     RETURNING *
   `, [type]);
+  return rows[0] ?? null;
+}
+
+/** Claim the next pending task of `type` FOR ONE SPECIFIC ENTITY. Backs the
+ *  scoped `--entity-id` CLI path: claiming by priority alone is not scoping,
+ *  because any other priority-1 task could be claimed instead. */
+export async function claimNextTaskForEntity(type: string, entityId: string): Promise<Task | null> {
+  const { rows } = await getPool().query(`
+    UPDATE task_queue
+    SET status = 'running', attempts = attempts + 1, updated_at = NOW()
+    WHERE id = (
+      SELECT id FROM task_queue
+      WHERE type = $1 AND entity_id = $2 AND status = 'pending' AND attempts < max_attempts
+      ORDER BY priority ASC, created_at ASC
+      LIMIT 1
+    )
+    RETURNING *
+  `, [type, entityId]);
   return rows[0] ?? null;
 }
 
@@ -431,6 +504,16 @@ export interface InnovatorInsert {
   team_size?: number | null;
   patents_filed?: number;
   status?: string;
+  // Feasibility (2026-07-21)
+  robustness_logistics?: string;
+  robustness_geographic_scalability?: string;
+  indigenous_tech?: boolean | null;
+  govt_mission_alignment?: string[];
+  subsidy_land_electricity?: Record<string, unknown>;
+  capex_subsidy_available?: boolean | null;
+  capex_subsidy_notes?: string | null;
+  opex_subsidy_available?: boolean | null;
+  opex_subsidy_notes?: string | null;
   data?: Record<string, unknown>;
 }
 
@@ -485,6 +568,10 @@ const INNOVATOR_PATCH_COLS = new Set([
   'trl_current', 'trl_target', 'geography', 'usp', 'sustainability_score',
   'circularity_indicators', 'ownership_transfer_open', 'mou_history', 'key_contacts', 'innovation_stage',
   'annual_revenue_cr', 'funding_raised_cr', 'team_size', 'patents_filed', 'status', 'data',
+  // Feasibility (2026-07-21)
+  'robustness_logistics', 'robustness_geographic_scalability', 'indigenous_tech',
+  'govt_mission_alignment', 'subsidy_land_electricity',
+  'capex_subsidy_available', 'capex_subsidy_notes', 'opex_subsidy_available', 'opex_subsidy_notes',
 ]);
 
 /** Patch scalar/array columns; only whitelisted keys present in `patch` are updated. */
@@ -511,6 +598,69 @@ export async function getInnovatorCounts(): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
   rows.forEach((r: any) => { counts[r.status] = Number(r.count); });
   return counts;
+}
+
+// ─── Cross-entity full-text search (FTS5) — Stage 2 ───────────────────────────
+
+export interface SearchHit {
+  entity_type: 'company' | 'scheme' | 'innovator';
+  entity_id: string;
+  name: string;
+  snippet: string;
+}
+
+const asStrArr = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : []);
+
+/** Turn a user query into a safe FTS5 MATCH expression (prefix-AND of tokens).
+ *  Raw user text can contain FTS operators that throw a syntax error, so we
+ *  extract alphanumeric tokens and quote each. Empty when nothing usable. */
+export function toFtsQuery(q: string): string {
+  const tokens = (q.toLowerCase().match(/[a-z0-9]+/gi) || []).slice(0, 12);
+  if (!tokens.length) return '';
+  return tokens.map(t => `"${t}"*`).join(' ');
+}
+
+/** Rebuild the FTS index from the three entity tables. Cheap at this data scale
+ *  (hundreds of rows); called before each search so results are always fresh. */
+export function rebuildSearchIndex(): void {
+  const db = getDb();
+  const ents = sqliteQuery(`SELECT id, name, category, data FROM entities`).rows;
+  const inns = sqliteQuery(`SELECT id, name, domain, description, usp, geography FROM innovators`).rows;
+  transaction(() => {
+    db.exec(`DELETE FROM search_fts`);
+    const ins = db.prepare(`INSERT INTO search_fts (entity_type, entity_id, name, body) VALUES (?, ?, ?, ?)`);
+    for (const e of ents) {
+      const data = (e.data || {}) as Record<string, any>;
+      const isScheme = e.category === 'govt_scheme';
+      const body = isScheme
+        ? [data.description, data.eligibility_text, asStrArr(data.sector_focus?.value).join(' '),
+           asStrArr(data.geography_focus?.value).join(' ')].filter(Boolean).join(' ')
+        : [asStrArr(data.sector_focus?.value).join(' '), asStrArr(data.domain_focus).join(' '),
+           data.raw_notes, asStrArr(data.key_programs?.value).join(' ')].filter(Boolean).join(' ');
+      ins.run(isScheme ? 'scheme' : 'company', e.id, e.name, body);
+    }
+    for (const n of inns) {
+      const domainLabel = (DOMAIN_LABELS as Record<string, string>)[n.domain] || n.domain || '';
+      const body = [n.description, n.usp, domainLabel, asStrArr(n.geography).join(' ')].filter(Boolean).join(' ');
+      ins.run('innovator', n.id, n.name, body);
+    }
+  });
+}
+
+/** Ranked cross-entity matches for `q`, best (bm25) first. */
+export function searchEntities(q: string, limit = 30): SearchHit[] {
+  const match = toFtsQuery(q);
+  if (!match) return [];
+  rebuildSearchIndex();
+  const rows = getDb().prepare(
+    `SELECT entity_type, entity_id, name,
+            snippet(search_fts, 3, '', '', '…', 12) AS snippet
+     FROM search_fts WHERE search_fts MATCH ? ORDER BY rank LIMIT ?`
+  ).all(match, limit) as any[];
+  return rows.map(r => ({
+    entity_type: r.entity_type as SearchHit['entity_type'],
+    entity_id: r.entity_id, name: r.name, snippet: r.snippet || '',
+  }));
 }
 
 export async function testConnection(): Promise<boolean> {

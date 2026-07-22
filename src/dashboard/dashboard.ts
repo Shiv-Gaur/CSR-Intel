@@ -6,8 +6,10 @@ import { z } from 'zod';
 import {
   getPool, enqueueTask, getMatchProfile, upsertMatchProfile,
   upsertEntity, deleteEntityCascade, applyManualEdits, rerankAllProfileScores,
-  insertInnovator, listInnovators, getInnovatorById, deleteInnovator, getInnovatorCounts,
+  insertInnovator, listInnovators, getInnovatorById, updateInnovator, deleteInnovator, getInnovatorCounts,
+  searchEntities, type SearchHit,
 } from '../db/index.js';
+import { curatedWebSearch } from '../tools/curated-search.js';
 import { matchFundersForInnovator, matchInnovatorsForFunder } from '../tools/match-engine.js';
 import { DOMAIN_LABELS } from '../utils/innovator-match.js';
 import { computeProfileMatch } from '../utils/match.js';
@@ -69,11 +71,14 @@ const editCompanySchema = z.object({
   score: z.number().min(0).max(100).nullable().optional(),
 });
 
+const INNOVATOR_DOMAINS = ['solid_waste', 'plastic', 'wastewater', 'air_pollution', 'e_waste',
+  'green_hydrogen', 'circular_economy', 'ai_medtech', 'water_body',
+  'semiconductors', 'energy_security', 'industry_4_0', 'smart_agriculture'] as const;
+
 const createInnovatorSchema = z.object({
   name: z.string().trim().min(2).max(200),
   type: z.enum(['startup', 'individual', 'research_institute']).default('startup'),
-  domain: z.enum(['solid_waste', 'plastic', 'wastewater', 'air_pollution', 'e_waste',
-    'green_hydrogen', 'circular_economy', 'ai_medtech', 'water_body']),
+  domain: z.enum(INNOVATOR_DOMAINS),
   trl_current: z.number().int().min(1).max(9).nullable().optional(),
   description: z.string().trim().max(5000).optional(),
   contact_email: z.string().trim().email().optional(),
@@ -83,6 +88,26 @@ const createInnovatorSchema = z.object({
   ownership_transfer_open: z.boolean().optional(),
   innovation_stage: z.enum(['ideation', 'prototype', 'pilot', 'scale', 'deployed']).optional(),
 });
+
+const ROBUSTNESS = ['strong', 'moderate', 'weak', 'unknown'] as const;
+
+// Feasibility edit — every field optional; only supplied fields are updated and
+// locked (data.feasibility_overrides) so re-enrichment never overwrites them.
+const feasibilitySchema = z.object({
+  robustness_logistics: z.enum(ROBUSTNESS).optional(),
+  robustness_geographic_scalability: z.enum(ROBUSTNESS).optional(),
+  indigenous_tech: z.boolean().nullable().optional(),
+  govt_mission_alignment: z.array(z.string().trim().min(1)).max(30).optional(),
+  subsidy_land_electricity: z.object({
+    land_subsidy: z.union([z.boolean(), z.string()]).nullable().optional(),
+    electricity_subsidy: z.union([z.boolean(), z.string()]).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  }).optional(),
+  capex_subsidy_available: z.boolean().nullable().optional(),
+  capex_subsidy_notes: z.string().trim().max(1000).nullable().optional(),
+  opex_subsidy_available: z.boolean().nullable().optional(),
+  opex_subsidy_notes: z.string().trim().max(1000).nullable().optional(),
+}).strict();
 
 const bulkActionSchema = z.object({
   action: z.enum(['reenrich', 'delete', 'mark_reviewed']),
@@ -288,6 +313,19 @@ function flattenInnovator(row: any) {
     teamSize: row.team_size,
     patentsFiled: row.patents_filed ?? 0,
     status: row.status,
+    // ── Feasibility (2026-07-21) ──
+    robustnessLogistics: row.robustness_logistics || 'unknown',
+    robustnessGeographicScalability: row.robustness_geographic_scalability || 'unknown',
+    indigenousTech: row.indigenous_tech == null ? null : !!row.indigenous_tech,
+    govtMissionAlignment: Array.isArray(row.govt_mission_alignment) ? row.govt_mission_alignment : [],
+    subsidyLandElectricity: (row.subsidy_land_electricity && typeof row.subsidy_land_electricity === 'object')
+      ? row.subsidy_land_electricity : { land_subsidy: null, electricity_subsidy: null, notes: null },
+    capexSubsidyAvailable: row.capex_subsidy_available == null ? null : !!row.capex_subsidy_available,
+    capexSubsidyNotes: row.capex_subsidy_notes || null,
+    opexSubsidyAvailable: row.opex_subsidy_available == null ? null : !!row.opex_subsidy_available,
+    opexSubsidyNotes: row.opex_subsidy_notes || null,
+    feasibilityOverrides: (data.feasibility_overrides && typeof data.feasibility_overrides === 'object') ? data.feasibility_overrides : {},
+    feasibilityDetectedAt: data.feasibility_detected_at ?? null,
     foundingYear: data.founding_year ?? null,
     founders: data.founders ?? [],
     awards: data.awards ?? [],
@@ -453,6 +491,38 @@ export function startDashboardServer(port = 3000) {
           schemesOpen: Number(schemeRow.rows[0]?.c || 0),
           averageMatch: rows.length ? Math.round(matchSum / rows.length) : 0,
         }));
+        return;
+      }
+
+      // 2c. GET /api/search?q=<query>[&live=true] — global cross-entity search.
+      // Local FTS5 results are instant and always returned; the live curated
+      // trusted-source pass only runs when live=true (the frontend fires it
+      // when local coverage is thin or the user asks explicitly), so a keystroke
+      // never blocks on the network.
+      if (pathname === '/api/search' && method === 'GET') {
+        const q = (urlObj.searchParams.get('q') || '').trim();
+        const live = urlObj.searchParams.get('live') === 'true';
+        const local = { companies: [] as any[], schemes: [] as any[], innovators: [] as any[] };
+        let hits: SearchHit[] = [];
+        if (q.length >= 2) hits = searchEntities(q, 40);
+        for (const h of hits) {
+          const item = { id: h.entity_id, name: h.name, snippet: h.snippet };
+          if (h.entity_type === 'company') local.companies.push(item);
+          else if (h.entity_type === 'scheme') local.schemes.push(item);
+          else local.innovators.push(item);
+        }
+        let liveResult: any = null;
+        if (live && q.length >= 2) {
+          try {
+            const leads = await curatedWebSearch(q);
+            liveResult = { leads };
+          } catch (err: any) {
+            log.warn('Curated web search failed', { q, error: err.message });
+            liveResult = { leads: [], error: 'Live search could not reach trusted sources right now.' };
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ query: q, localTotal: hits.length, local, live: liveResult }));
         return;
       }
 
@@ -1194,6 +1264,39 @@ export function startDashboardServer(port = 3000) {
           imported: insertedIds.length, ids: insertedIds,
           skipped: parsed.errors, duplicates,
         }));
+        return;
+      }
+
+      // 13f. PUT /api/innovators/:id/feasibility — manual feasibility edits.
+      // Supplied fields are written and LOCKED (data.feasibility_overrides) so
+      // the enrichment auto-detector never overwrites a human correction.
+      const feasMatch = pathname.match(/^\/api\/innovators\/([a-f\d-]{36})\/feasibility$/i);
+      if (feasMatch && method === 'PUT') {
+        const parsed = feasibilitySchema.safeParse(await readJsonBody(req));
+        if (!parsed.success) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid feasibility', details: parsed.error.flatten() }));
+          return;
+        }
+        const id = feasMatch[1];
+        const row = await getInnovatorById(id);
+        if (!row) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Innovator not found' }));
+          return;
+        }
+        const b = parsed.data;
+        const patch: Record<string, unknown> = {};
+        const locks: Record<string, boolean> = { ...(row.data?.feasibility_overrides || {}) };
+        for (const key of Object.keys(b) as Array<keyof typeof b>) {
+          patch[key] = b[key];
+          locks[key] = true; // every field the user touches becomes locked
+        }
+        patch.data = { ...(row.data || {}), feasibility_overrides: locks };
+        await updateInnovator(id, patch);
+        log.info('Innovator feasibility updated (locked)', { id, fields: Object.keys(b) });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
         return;
       }
 

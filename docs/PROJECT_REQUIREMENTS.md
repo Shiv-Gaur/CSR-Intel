@@ -4,7 +4,7 @@
 > completed or a new one is added. Do not drop requirements — if something can't be done
 > this session, it stays open here.
 >
-> Last updated: 2026-07-13
+> Last updated: 2026-07-21
 
 ## Requirements
 
@@ -241,3 +241,43 @@
       on first browser download; auto-updates themselves bypass SmartScreen —
       no Mark-of-the-Web), full update round-trip untested until a real
       GitHub release exists.
+- [x] STAGE 1 — Expanded domain taxonomy + Innovator feasibility fields — DONE
+      2026-07-21. Domain taxonomy grew 9→13: added semiconductors,
+      energy_security, industry_4_0, smart_agriculture (clean_air folded into
+      air_pollution, renewable_missions into green_hydrogen via keywords).
+      Updated DOMAIN_SECTOR_MAP/DOMAIN_LABELS/DOMAIN_KEYWORDS (innovator-match.ts),
+      InnovatorDomain union (types), createInnovator Zod enum, dashboard DOMAINS
+      (filter + Add-Innovator dropdowns). New Innovator-only columns (migration in
+      runMigrations, idempotent PRAGMA-guarded ALTER for existing DBs — RAN on the
+      live 5-innovator DB): robustness_logistics, robustness_geographic_scalability
+      (strong/moderate/weak/unknown), indigenous_tech (bool/null), govt_mission_
+      alignment (text[]), subsidy_land_electricity (json {land,electricity,notes}),
+      capex_subsidy_available/notes, opex_subsidy_available/notes. Deterministic
+      LLM-free auto-detection during enrichment (src/utils/feasibility.ts):
+      indigenous ("Made in India" vs "licensed from"), 14 govt missions (PLI, Make
+      in India, Swachh Bharat, National Hydrogen Mission…), subsidy keyword scans —
+      all low-confidence, fill-only-if-empty, never overwrite locked fields. New
+      "Feasibility" tab in the Innovator detail panel (read summary + inline edit
+      form) — PUT /api/innovators/:id/feasibility writes + LOCKS every touched
+      field (data.feasibility_overrides), so re-enrichment can't clobber a human
+      value. New Innovators-tab filters: Indigenous Tech (yes/no/unknown pills) +
+      Government Mission Alignment (multiselect). Tests: feasibility.test.ts (11).
+      Verified live: Chakr Innovation feasibility PUT round-trip + lock map.
+- [x] STAGE 2 — Internal curated cross-entity search engine — DONE 2026-07-21.
+      Global header search (🔍 / Ctrl+K) opens an overlay, separate from the
+      per-tab table search. Local-first: SQLite FTS5 virtual table search_fts
+      (created in runMigrations; FTS5 ships in better-sqlite3), rebuilt on demand
+      from companies+schemes+innovators (name/sectors/domain_focus/description/
+      usp/eligibility). GET /api/search?q= returns ranked matches grouped by type,
+      each clickable to its detail panel; toFtsQuery sanitizes user input to a safe
+      prefix-AND MATCH (operator chars can't throw). Live curated fallback
+      (src/tools/curated-search.ts) fires when local <5 or on "Search the web for
+      more": Wikipedia OpenSearch + Screener API + IndiaCSR/YourStory/Inc42 title
+      scrape, all keyless, fail-soft, deduped, round-robin interleaved. Leads shown
+      in a distinct "Found via trusted sources" section (NOT as verified data) with
+      "＋ Add as Innovator/Company" — company adds POST /api/companies + open live
+      enrichment progress; innovator adds pre-fill the Add-Innovator modal (domain
+      pick) then run deep research. Tests: search-fts.test.ts (6, incl. the
+      spec "plastic waste"→Nepra case), curated-search.test.ts (6, HTTP mocked).
+      Verified live: DB-hit "plastic waste" → 17 local incl. Nepra; DB-miss
+      "hydrogen fuel cells" → 0 local → live Wikipedia leads.

@@ -88,10 +88,17 @@ async function main() {
         max_attempts: 1,
       });
 
-      // Execute once to drain immediately
-      const { runEnrichmentAgent } = await import('./agents/enrichment.agent.js');
-      await runEnrichmentAgent();
-      logger.info('Manual enrichment complete.');
+      // Process ONLY this entity, then exit. Deliberately not runEnrichmentAgent():
+      // that drains the entire pending queue, so a targeted `--entity-id` run used
+      // to rewrite every backlogged company too (22 entities rewritten when 2 were
+      // expected, 2026-07-19). Scoped claim keeps the blast radius at one row.
+      const { processEnrichmentTask } = await import('./agents/enrichment.agent.js');
+      const didWork = await processEnrichmentTask(entityId);
+      if (!didWork) {
+        logger.warn('No pending enrich task claimed for this entity — nothing to do', { entityId });
+        process.exit(1);
+      }
+      logger.info('Manual enrichment complete (single entity).', { entityId });
       process.exit(0);
     } catch (err: any) {
       logger.error('Manual enrichment failed', { error: err.message });

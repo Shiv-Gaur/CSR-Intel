@@ -204,6 +204,7 @@
         <div><h1>CSR Funding Intelligence</h1><p>Deterministic discovery, enrichment &amp; verification</p></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
+        <button class="iconbtn" id="globalSearchBtn" title="Search everything (Ctrl+K)" aria-label="Search everything">🔍</button>
         <button id="addBtn">＋ Add Company</button>
         <button id="addInnBtn" style="display:none">＋ Add Innovator</button>
         <button id="importInnBtn" style="display:none" title="Bulk import innovators from .xlsx or .csv">⬆ Import from Excel</button>
@@ -344,6 +345,19 @@
     </div>
   </div>
 
+  <!-- Global cross-entity search overlay (Stage 2) -->
+  <div class="modal-bg" id="searchModal" style="align-items:flex-start;padding-top:64px">
+    <div class="modal" style="max-width:780px">
+      <div class="mhead" style="gap:12px">
+        <div class="search" style="flex:1"><span aria-hidden="true">🔍</span><input id="globalSearchInput" type="text" placeholder="Search companies, schemes &amp; innovators — e.g. plastic waste" autocomplete="off"></div>
+        <button class="close" id="searchClose" aria-label="Close search">×</button>
+      </div>
+      <div class="mbody" style="max-height:72vh">
+        <div id="searchResults"><div class="empty" style="color:var(--text-muted);text-align:center;padding:28px 10px">Type at least 2 characters to search your database. If coverage is thin, we’ll pull fresh leads from trusted sources.</div></div>
+      </div>
+    </div>
+  </div>
+
   <div class="wrap">
     <div class="tabs">
       <button class="tab active" id="tabCompanies" data-tab="companies">Companies</button>
@@ -405,7 +419,10 @@
     var GEOS = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'];
     var STATUS = { complete:{label:'Ready',cls:'green'}, verified:{label:'Verified',cls:'blue'}, enriched:{label:'Enriched',cls:'grey'}, human_review:{label:'Needs Review',cls:'amber'}, stub:{label:'Processing',cls:'grey'}, active:{label:'Active',cls:'green'}, inactive:{label:'Inactive',cls:'grey'} };
     var TRASH_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
-    var DOMAINS = [['solid_waste','Solid Waste'],['plastic','Plastic'],['wastewater','Wastewater'],['air_pollution','Air Pollution'],['e_waste','E-Waste'],['green_hydrogen','Green Hydrogen'],['circular_economy','Circular Economy'],['ai_medtech','AI MedTech'],['water_body','Water Body']];
+    var DOMAINS = [['solid_waste','Solid Waste'],['plastic','Plastic'],['wastewater','Wastewater'],['air_pollution','Air Pollution'],['e_waste','E-Waste'],['green_hydrogen','Green Hydrogen'],['circular_economy','Circular Economy'],['ai_medtech','AI MedTech'],['water_body','Water Body'],['semiconductors','Semiconductors'],['energy_security','Energy Security'],['industry_4_0','Industry 4.0'],['smart_agriculture','Smart Agriculture']];
+    // Government missions/schemes — keep in sync with GOVT_MISSIONS in src/utils/feasibility.ts.
+    var GOVT_MISSIONS = ['PLI','Make in India','Digital India','Startup India','Atmanirbhar Bharat','National Solar Mission','Swachh Bharat Mission','Namami Gange','National Hydrogen Mission','Smart Cities Mission','Skill India','Jal Jeevan Mission','Semicon India','FAME'];
+    var ROBUSTNESS_LBL = {strong:'Strong',moderate:'Moderate',weak:'Weak',unknown:'Unknown'};
     var STAGES = [['ideation','Ideation'],['prototype','Prototype'],['pilot','Pilot'],['scale','Scale'],['deployed','Deployed']];
     function domainLabel(d){ for(var i=0;i<DOMAINS.length;i++)if(DOMAINS[i][0]===d)return DOMAINS[i][1]; return d||'—'; }
     function stageLabel(s){ for(var i=0;i<STAGES.length;i++)if(STAGES[i][0]===s)return STAGES[i][1]; return s||'—'; }
@@ -427,7 +444,7 @@
     var companies=[], schemes=[], innovators=[], selectedId=null, selectedKind=null, detailTab='overview';
     var activeTab='companies';
     var selected={}; // id -> true (bulk)
-    var F = { q:'', status:'all', score:'all', match:'all', source:'all', trl:'all', sectors:[], geos:[], domain:'all', stage:'all', own:'all' };
+    var F = { q:'', status:'all', score:'all', match:'all', source:'all', trl:'all', sectors:[], geos:[], domain:'all', stage:'all', own:'all', indigenous:'all', missions:[] };
 
     // ─── URL persistence ─────────────────────────────────────────────────────
     function readURL(){
@@ -436,8 +453,10 @@
       F.q=p.get('q')||''; F.status=p.get('status')||'all'; F.score=p.get('score')||'all';
       F.match=p.get('match')||'all'; F.source=p.get('source')||'all'; F.trl=p.get('trl')||'all';
       F.domain=p.get('domain')||'all'; F.stage=p.get('stage')||'all'; F.own=p.get('own')||'all';
+      F.indigenous=p.get('indigenous')||'all';
       F.sectors=(p.get('sectors')||'').split(',').filter(Boolean);
       F.geos=(p.get('geos')||'').split(',').filter(Boolean);
+      F.missions=(p.get('missions')||'').split(',').filter(Boolean);
       var sk=p.get('sort'); SORT=sk?{key:sk,dir:p.get('dir')==='desc'?-1:1}:{key:null,dir:0};
       document.getElementById('search').value=F.q;
     }
@@ -448,14 +467,16 @@
       if(F.score!=='all')p.set('score',F.score); if(F.match!=='all')p.set('match',F.match);
       if(F.source!=='all')p.set('source',F.source); if(F.trl!=='all')p.set('trl',F.trl);
       if(F.domain!=='all')p.set('domain',F.domain); if(F.stage!=='all')p.set('stage',F.stage); if(F.own!=='all')p.set('own',F.own);
+      if(F.indigenous!=='all')p.set('indigenous',F.indigenous);
       if(F.sectors.length)p.set('sectors',F.sectors.join(','));
       if(F.geos.length)p.set('geos',F.geos.join(','));
+      if(F.missions.length)p.set('missions',F.missions.join(','));
       if(SORT.key&&SORT.dir){p.set('sort',SORT.key);p.set('dir',SORT.dir===1?'asc':'desc');}
       var qs=p.toString();
       history.replaceState(null,'',location.pathname+(qs?('?'+qs):''));
     }
-    function filtersActive(){ return F.q||F.status!=='all'||F.score!=='all'||F.match!=='all'||F.source!=='all'||F.trl!=='all'||F.domain!=='all'||F.stage!=='all'||F.own!=='all'||F.sectors.length||F.geos.length; }
-    function clearAll(){ F={q:'',status:'all',score:'all',match:'all',source:'all',trl:'all',sectors:[],geos:[],domain:'all',stage:'all',own:'all'}; document.getElementById('search').value=''; renderFilters(); writeURL(); render(); }
+    function filtersActive(){ return F.q||F.status!=='all'||F.score!=='all'||F.match!=='all'||F.source!=='all'||F.trl!=='all'||F.domain!=='all'||F.stage!=='all'||F.own!=='all'||F.indigenous!=='all'||F.sectors.length||F.geos.length||F.missions.length; }
+    function clearAll(){ F={q:'',status:'all',score:'all',match:'all',source:'all',trl:'all',sectors:[],geos:[],domain:'all',stage:'all',own:'all',indigenous:'all',missions:[]}; document.getElementById('search').value=''; renderFilters(); writeURL(); render(); }
 
     // ─── Filter bar ──────────────────────────────────────────────────────────
     var STATUS_PILLS=[['all','All'],['complete','Ready'],['verified','Verified'],['human_review','Needs Review'],['stub','Processing']];
@@ -467,6 +488,7 @@
     var STAGE_PILLS=[['all','All']].concat(STAGES);
     var OWN_PILLS=[['all','All'],['open','Open to Transfer'],['closed','Not Open']];
     var INN_TRL_PILLS=[['all','All'],['research','TRL 1-3'],['development','TRL 4-6'],['deployment','TRL 7-9']];
+    var INDIGENOUS_PILLS=[['all','All'],['yes','Indigenous'],['no','Foreign/Licensed'],['unknown','Unknown']];
 
     function pillRow(label,key,pills){
       return '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">'+label+'</span><div class="pills">'+
@@ -485,8 +507,9 @@
         html += pillRow('Domain','domain',DOMAIN_PILLS);
         html += pillRow('TRL','trl',INN_TRL_PILLS);
         html += pillRow('Stage','stage',STAGE_PILLS);
-        html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Geography</span><div class="pills">'+ddRow('Geography','geos',GEOS)+'</div></div>';
+        html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Refine</span><div class="pills">'+ddRow('Geography','geos',GEOS)+ddRow('Govt Mission','missions',GOVT_MISSIONS)+'</div></div>';
         html += pillRow('Ownership Transfer','own',OWN_PILLS);
+        html += pillRow('Indigenous Tech','indigenous',INDIGENOUS_PILLS);
         var ichips=[];
         function ichip(label,clear){ return '<span class="achip">'+esc(label)+' <b data-clear=\''+clear+'\'>×</b></span>'; }
         if(F.q)ichips.push(ichip('Search: "'+F.q+'"','q'));
@@ -494,7 +517,9 @@
         if(F.trl!=='all')ichips.push(ichip('TRL: '+pillLabel(INN_TRL_PILLS,F.trl),'trl'));
         if(F.stage!=='all')ichips.push(ichip('Stage: '+stageLabel(F.stage),'stage'));
         F.geos.forEach(function(g){ichips.push(ichip('Geo: '+g,'geo:'+g));});
+        F.missions.forEach(function(m){ichips.push(ichip('Mission: '+m,'mission:'+m));});
         if(F.own!=='all')ichips.push(ichip('Ownership: '+pillLabel(OWN_PILLS,F.own),'own'));
+        if(F.indigenous!=='all')ichips.push(ichip('Indigenous: '+pillLabel(INDIGENOUS_PILLS,F.indigenous),'indigenous'));
         if(ichips.length)html+='<div class="chips-active">'+ichips.join('')+'<button class="clearall" id="clearAll">Clear all filters</button></div>';
         fb.innerHTML=html;
         wireFilters();
@@ -553,16 +578,18 @@
           if(c==='q'){F.q='';document.getElementById('search').value='';}
           else if(c.indexOf('sector:')===0){F.sectors=F.sectors.filter(function(x){return x!==c.slice(7);});}
           else if(c.indexOf('geo:')===0){F.geos=F.geos.filter(function(x){return x!==c.slice(4);});}
+          else if(c.indexOf('mission:')===0){F.missions=F.missions.filter(function(x){return x!==c.slice(8);});}
           else F[c]='all';
           renderFilters(); writeURL(); render();
         });
       });
     }
+    var DD_LABELS={sectors:'Sector',geos:'Geography',missions:'Govt Mission'};
     function refreshDDLabels(){ // update count labels without closing menu
       Array.prototype.forEach.call(document.querySelectorAll('.dd'),function(dd){
         var k=dd.getAttribute('data-dd'); var n=F[k].length;
         dd.classList.toggle('has',n>0);
-        var btn=dd.querySelector('button'); var base=k==='sectors'?'Sector':'Geography';
+        var btn=dd.querySelector('button'); var base=DD_LABELS[k]||k;
         btn.firstChild.nodeValue=base+(n?(' ('+n+')'):'')+' ';
       });
     }
@@ -691,6 +718,8 @@
         if(F.geos.length && !F.geos.some(function(g){return (n.geography||[]).indexOf(g)!==-1;}))return false;
         if(F.own==='open'&&!n.ownershipTransferOpen)return false;
         if(F.own==='closed'&&n.ownershipTransferOpen)return false;
+        if(F.indigenous!=='all'){ var it=n.indigenousTech; if(F.indigenous==='yes'&&it!==true)return false; if(F.indigenous==='no'&&it!==false)return false; if(F.indigenous==='unknown'&&it!=null)return false; }
+        if(F.missions.length && !F.missions.some(function(m){return (n.govtMissionAlignment||[]).indexOf(m)!==-1;}))return false;
         if(!matchSearch(n.name,domainLabel(n.domain)+' '+(n.geography||[]).join(' ')))return false;
         return true;
       });
@@ -954,11 +983,69 @@
         ((m.reasons&&m.reasons.length)?'<ul style="margin:6px 0 0;padding-left:16px">'+m.reasons.map(function(r){return '<li style="font-size:12px;color:var(--text-muted)">'+esc(r)+'</li>';}).join('')+'</ul>':'')+
         '</div>';
     }
+    // ─── Feasibility tab (display + inline edit with override-lock) ──────────
+    var FEAS_SELCSS='padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);width:100%';
+    function robBadgeCls(v){ return v==='strong'?'green':v==='moderate'?'blue':v==='weak'?'amber':'grey'; }
+    function robBadge(v){ return '<span class="badge '+robBadgeCls(v)+'">'+(ROBUSTNESS_LBL[v]||'Unknown')+'</span>'; }
+    function indigBadge(v){ if(v===true)return '<span class="badge green">✓ Indigenous / Made in India</span>'; if(v===false)return '<span class="badge grey">Foreign / Licensed</span>'; return '<span class="badge grey">Unknown</span>'; }
+    function subFlagBadge(v,yes,no){ if(v===true||v==='true')return '<span class="badge green">'+yes+'</span>'; if(v===false||v==='false')return '<span class="badge grey">'+no+'</span>'; if(typeof v==='string'&&v)return '<span class="badge blue">'+esc(v)+'</span>'; return '<span class="badge grey">Unknown</span>'; }
+    function robSelect(id,val){ return '<select id="'+id+'" style="'+FEAS_SELCSS+'">'+['strong','moderate','weak','unknown'].map(function(o){return '<option value="'+o+'"'+(val===o?' selected':'')+'>'+ROBUSTNESS_LBL[o]+'</option>';}).join('')+'</select>'; }
+    function triSelect(id,val){ var cur=(val===true)?'yes':(val===false)?'no':'unknown'; return '<select id="'+id+'" style="'+FEAS_SELCSS+'">'+[['unknown','Unknown'],['yes','Yes'],['no','No']].map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'; }
+    function lockTag(ov,k){ return (ov&&ov[k])?' <span class="mbadge">✏ locked</span>':''; }
+    function feasibilityHtml(n){
+      var ov=n.feasibilityOverrides||{}; var sub=n.subsidyLandElectricity||{}; var missions=n.govtMissionAlignment||[];
+      var h='<div class="hint" style="margin-bottom:12px">Signals below are <b>auto-detected</b> from source text (low confidence). Edit any field and Save — your value is <b>locked</b> and never overwritten by re-enrichment.'+(n.feasibilityDetectedAt?' Last auto-scan: '+esc(fmtDate(n.feasibilityDetectedAt)):'')+'</div>';
+      // Read summary
+      h+='<div class="scoreblock" style="background:var(--page)"><div class="field" style="margin-bottom:10px"><div class="k">Robustness</div><div class="v" style="display:flex;gap:16px;flex-wrap:wrap"><span>Logistics: '+robBadge(n.robustnessLogistics)+'</span><span>Geographic scalability: '+robBadge(n.robustnessGeographicScalability)+'</span></div></div>'+
+        '<div class="field" style="margin-bottom:10px"><div class="k">Indigenous Technology</div><div class="v">'+indigBadge(n.indigenousTech)+'</div></div>'+
+        '<div class="field" style="margin-bottom:10px"><div class="k">Government Mission Alignment</div><div class="v">'+(missions.length?('<div class="chips">'+missions.map(function(m){return '<span class="chip" style="color:var(--primary);border-color:rgba(37,99,235,.4)">'+esc(m)+'</span>';}).join('')+'</div>'):'<span style="color:var(--text-muted)">None detected</span>')+'</div></div>'+
+        '<div class="field" style="margin-bottom:0"><div class="k">Subsidy Availability</div><div class="v" style="display:flex;gap:8px;flex-wrap:wrap">'+
+          'Land: '+subFlagBadge(sub.land_subsidy,'Available','Not found')+' Electricity: '+subFlagBadge(sub.electricity_subsidy,'Available','Not found')+' Capex: '+subFlagBadge(n.capexSubsidyAvailable,'Available','Not found')+' Opex: '+subFlagBadge(n.opexSubsidyAvailable,'Available','Not found')+'</div>'+
+          ((sub.notes||n.capexSubsidyNotes||n.opexSubsidyNotes)?'<div class="hint" style="margin-top:6px">'+[sub.notes,n.capexSubsidyNotes,n.opexSubsidyNotes].filter(Boolean).map(esc).join(' · ')+'</div>':'')+'</div></div>';
+      // Edit form
+      h+='<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px">'+
+        '<div style="font-weight:650;margin-bottom:12px">Edit Feasibility</div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:12px"><div style="flex:1"><div class="k">Robustness — Logistics'+lockTag(ov,'robustness_logistics')+'</div>'+robSelect('feasRobLog',n.robustnessLogistics)+'</div>'+
+          '<div style="flex:1"><div class="k">Robustness — Geo Scalability'+lockTag(ov,'robustness_geographic_scalability')+'</div>'+robSelect('feasRobGeo',n.robustnessGeographicScalability)+'</div></div>'+
+        '<div class="field"><div class="k">Indigenous Technology'+lockTag(ov,'indigenous_tech')+'</div>'+triSelect('feasIndig',n.indigenousTech)+'</div>'+
+        '<div class="field"><div class="k">Government Mission Alignment'+lockTag(ov,'govt_mission_alignment')+'</div><div class="checkgrid" id="feasMissions">'+GOVT_MISSIONS.map(function(m){return '<label><input type="checkbox" class="feasMission" value="'+esc(m)+'"'+(missions.indexOf(m)!==-1?' checked':'')+'>'+esc(m)+'</label>';}).join('')+'</div></div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:12px"><div style="flex:1"><div class="k">Land Subsidy'+lockTag(ov,'subsidy_land_electricity')+'</div>'+triSelect('feasLand',sub.land_subsidy===true?true:sub.land_subsidy===false?false:null)+'</div>'+
+          '<div style="flex:1"><div class="k">Electricity Subsidy</div>'+triSelect('feasPower',sub.electricity_subsidy===true?true:sub.electricity_subsidy===false?false:null)+'</div></div>'+
+        '<div class="field"><div class="k">Subsidy notes (land / electricity)</div><div class="taginput" style="padding:0"><input id="feasSubNotes" type="text" value="'+esc(sub.notes||'')+'" placeholder="optional" style="padding:9px 11px"></div></div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:12px"><div style="flex:1"><div class="k">Capex Subsidy'+lockTag(ov,'capex_subsidy_available')+'</div>'+triSelect('feasCapex',n.capexSubsidyAvailable)+'</div>'+
+          '<div style="flex:2"><div class="k">Capex notes</div><div class="taginput" style="padding:0"><input id="feasCapexNotes" type="text" value="'+esc(n.capexSubsidyNotes||'')+'" placeholder="optional" style="padding:9px 11px"></div></div></div>'+
+        '<div style="display:flex;gap:14px;margin-bottom:12px"><div style="flex:1"><div class="k">Opex Subsidy'+lockTag(ov,'opex_subsidy_available')+'</div>'+triSelect('feasOpex',n.opexSubsidyAvailable)+'</div>'+
+          '<div style="flex:2"><div class="k">Opex notes</div><div class="taginput" style="padding:0"><input id="feasOpexNotes" type="text" value="'+esc(n.opexSubsidyNotes||'')+'" placeholder="optional" style="padding:9px 11px"></div></div></div>'+
+        '<div style="display:flex;justify-content:flex-end;gap:10px"><button class="primary" id="feasSave">Save Feasibility</button></div>'+
+        '<div class="hint" style="margin-top:8px">Saving locks every field on this form so automated re-enrichment won\'t change them.</div></div>';
+      return h;
+    }
+    function wireFeasibility(n){
+      var btn=document.getElementById('feasSave'); if(!btn)return;
+      function v(id){ var e=document.getElementById(id); return e?e.value:''; }
+      function tri(x){ return x==='yes'?true:x==='no'?false:null; }
+      function txt(id){ var e=document.getElementById(id); return e&&e.value.trim()?e.value.trim():null; }
+      btn.addEventListener('click',function(){
+        var missions=Array.prototype.map.call(document.querySelectorAll('.feasMission:checked'),function(i){return i.value;});
+        var body={
+          robustness_logistics:v('feasRobLog'), robustness_geographic_scalability:v('feasRobGeo'),
+          indigenous_tech:tri(v('feasIndig')), govt_mission_alignment:missions,
+          subsidy_land_electricity:{ land_subsidy:tri(v('feasLand')), electricity_subsidy:tri(v('feasPower')), notes:txt('feasSubNotes') },
+          capex_subsidy_available:tri(v('feasCapex')), capex_subsidy_notes:txt('feasCapexNotes'),
+          opex_subsidy_available:tri(v('feasOpex')), opex_subsidy_notes:txt('feasOpexNotes')
+        };
+        btn.disabled=true; btn.textContent='Saving…';
+        fetch('/api/innovators/'+n.id+'/feasibility',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+          .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+          .then(function(res){ btn.disabled=false; btn.textContent='Save Feasibility'; if(res.ok&&res.j.success){ showToast('Feasibility saved & locked'); fetch('/api/innovators/'+n.id).then(function(r){return r.json();}).then(function(nn){ renderInnovatorDetail(nn); loadInnovators(); }); } else showToast((res.j&&res.j.error)||'Could not save'); })
+          .catch(function(){ btn.disabled=false; btn.textContent='Save Feasibility'; showToast('Request failed'); });
+      });
+    }
     function renderInnovatorDetail(n){
      try {
       var si=statusInfo(n.status);
       var head='<h3>'+esc(n.name)+'</h3><div class="meta">'+esc(domainLabel(n.domain))+' · '+esc(stageLabel(n.innovationStage))+' · <span class="badge '+si.cls+'">'+esc(si.label)+'</span> · '+trlNumBadge(n.trlCurrent)+'</div>';
-      var tabs='<div class="dtabs">'+['overview','technology','sustainability','partnerships','match'].map(function(t){ var lbl={overview:'Overview',technology:'Technology',sustainability:'Sustainability',partnerships:'Partnerships',match:'Match Analysis'}[t]; return '<button class="dtab'+(detailTab===t?' active':'')+'" data-dtab="'+t+'">'+lbl+'</button>'; }).join('')+'</div>';
+      var tabs='<div class="dtabs">'+['overview','technology','sustainability','partnerships','feasibility','match'].map(function(t){ var lbl={overview:'Overview',technology:'Technology',sustainability:'Sustainability',partnerships:'Partnerships',feasibility:'Feasibility',match:'Match Analysis'}[t]; return '<button class="dtab'+(detailTab===t?' active':'')+'" data-dtab="'+t+'">'+lbl+'</button>'; }).join('')+'</div>';
       var body='';
       if(detailTab==='overview'){
         body+=field('Description',esc(n.description||'—'));
@@ -989,6 +1076,8 @@
         body+=field('Ownership / Technology Transfer',n.ownershipTransferOpen?'<span class="badge green">Open to license or transfer technology</span>':'<span class="badge grey">Not open to transfer</span>');
         var mous=n.mouHistory||[];
         body+=field('MoU History',mous.length?('<ul style="padding-left:16px">'+mous.map(function(m){return '<li style="font-size:12.5px"><b>'+esc(m.partner||'')+'</b>'+(m.year?' ('+esc(m.year)+')':'')+(m.description?' — '+esc(m.description):'')+'</li>';}).join('')+'</ul>'):'<span style="color:var(--text-muted)">No MoUs recorded.</span>');
+      } else if(detailTab==='feasibility'){
+        body+=feasibilityHtml(n);
       } else {
         body+='<div id="innMatches"><div class="empty">Loading best matching funders…</div></div>';
       }
@@ -996,6 +1085,7 @@
       document.getElementById('detail').innerHTML=head+tabs+body;
       Array.prototype.forEach.call(document.querySelectorAll('.dtab'),function(b){ b.addEventListener('click',function(){ detailTab=b.getAttribute('data-dtab'); renderInnovatorDetail(n); }); });
       var db=document.getElementById('innDelBtn'); if(db)db.addEventListener('click',function(){ deleteInnovatorRow(n.id); });
+      if(detailTab==='feasibility')wireFeasibility(n);
       if(detailTab==='match')loadInnovatorMatches(n.id);
      } catch(err){ document.getElementById('detail').innerHTML='<div class="empty">Could not render innovator ('+esc(err.message)+').</div>'; }
     }
@@ -1355,6 +1445,77 @@
 
     document.getElementById('search').addEventListener('input',function(e){ F.q=e.target.value.trim(); writeURL(); renderFilters(); render(); });
     document.getElementById('csvBtn').addEventListener('click',function(){ window.location.href=activeTab==='companies'?'/api/export/csv':'/api/schemes/export/csv'; });
+
+    // ─── Global cross-entity search overlay (Stage 2) ────────────────────────
+    var searchSeq=0, searchTimer=null, lastSearchQ='';
+    var GS_HINT='<div class="empty" style="color:var(--text-muted);text-align:center;padding:28px 10px">Type at least 2 characters to search your database. If coverage is thin, we’ll pull fresh leads from trusted sources.</div>';
+    function openGlobalSearch(){ document.getElementById('searchModal').classList.add('show'); var i=document.getElementById('globalSearchInput'); setTimeout(function(){i.focus();i.select();},40); var q=i.value.trim(); if(q.length>=2)runGlobalSearch(q,false); }
+    function closeGlobalSearch(){ document.getElementById('searchModal').classList.remove('show'); }
+    function gsIcon(type){ return type==='company'?'🏢':type==='scheme'?'🏛':'💡'; }
+    function searchLocalSection(local){
+      var groups=[['companies','Companies','company'],['schemes','Welfare Schemes','scheme'],['innovators','Innovators','innovator']];
+      var total=local.companies.length+local.schemes.length+local.innovators.length;
+      if(!total)return '<div style="color:var(--text-muted);font-size:13px;padding:8px 2px">No matches in your database.</div>';
+      var html='';
+      groups.forEach(function(g){ var arr=local[g[0]]; if(!arr.length)return;
+        html+='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);font-weight:700;margin:12px 0 6px">'+g[1]+' ('+arr.length+')</div>';
+        html+=arr.map(function(it){ return '<div class="gs-hit" data-gtype="'+g[2]+'" data-gid="'+esc(it.id)+'" style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;cursor:pointer"><div>'+gsIcon(g[2])+'</div><div><div style="font-weight:600">'+esc(it.name)+'</div>'+(it.snippet?'<div class="csub">'+esc(it.snippet)+'</div>':'')+'</div></div>'; }).join('');
+      });
+      return html;
+    }
+    function searchLiveSection(live){
+      if(!live)return '';
+      if(live.error)return '<div style="color:var(--warn,#b45309);font-size:13px;padding:8px 2px">'+esc(live.error)+'</div>';
+      var leads=live.leads||[];
+      if(!leads.length)return '<div style="color:var(--text-muted);font-size:13px;padding:8px 2px">No leads returned from trusted sources.</div>';
+      return leads.map(function(l){
+        var addBtns='';
+        if(l.suggestedType!=='company')addBtns+='<button data-addinn="'+esc(l.name)+'" style="padding:5px 9px;font-size:12px">＋ Innovator</button>';
+        if(l.suggestedType!=='innovator')addBtns+='<button data-addco="'+esc(l.name)+'" style="padding:5px 9px;font-size:12px">＋ Company</button>';
+        return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><div style="font-weight:600">'+esc(l.name)+' <span class="mbadge auto">'+esc(l.source)+'</span></div>'+(l.snippet?'<div class="csub">'+esc(l.snippet)+'</div>':'')+(l.url?'<div><a href="'+esc(l.url)+'" target="_blank" rel="noopener" style="font-size:12px">View source ↗</a></div>':'')+'</div><div style="display:flex;gap:6px;flex-shrink:0">'+addBtns+'</div></div></div>';
+      }).join('');
+    }
+    function renderSearchResults(data,liveLoading){
+      var box=document.getElementById('searchResults');
+      var total=data.local.companies.length+data.local.schemes.length+data.local.innovators.length;
+      if(!total && !liveLoading && data.live && (!data.live.leads||!data.live.leads.length) && !data.live.error){
+        box.innerHTML='<div class="empty" style="color:var(--text-muted);text-align:center;padding:28px 10px">No matches found in database or trusted sources.</div>'; return;
+      }
+      var html='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--primary);font-weight:700">In your database</div>'+searchLocalSection(data.local);
+      html+='<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--purple);font-weight:700">Found via trusted sources</span>'+((!data.live&&!liveLoading)?'<button id="gsLiveBtn" style="padding:4px 10px;font-size:12px">Search the web for more</button>':'')+'</div>';
+      if(liveLoading)html+='<div style="color:var(--text-muted);font-size:13px;padding:10px 2px">⏳ Searching trusted sources (IndiaCSR, Wikipedia, Screener, YourStory, Inc42)… this can take a few seconds.</div>';
+      else if(data.live)html+='<div class="hint" style="margin:2px 0 8px">Unverified leads — not saved data. Add one to create a stub and run full deep research.</div>'+searchLiveSection(data.live);
+      else html+='<div style="color:var(--text-muted);font-size:13px;padding:8px 2px">Not searched yet — click “Search the web for more”.</div>';
+      html+='</div>';
+      box.innerHTML=html; wireSearchResults();
+    }
+    function wireSearchResults(){
+      var box=document.getElementById('searchResults');
+      Array.prototype.forEach.call(box.querySelectorAll('.gs-hit'),function(el){ el.addEventListener('click',function(){ openSearchResult(el.getAttribute('data-gtype'),el.getAttribute('data-gid')); }); });
+      var lb=document.getElementById('gsLiveBtn'); if(lb)lb.addEventListener('click',function(){ runGlobalSearch(lastSearchQ,true); });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-addinn]'),function(b){ b.addEventListener('click',function(){ addInnovatorFromLead(b.getAttribute('data-addinn')); }); });
+      Array.prototype.forEach.call(box.querySelectorAll('[data-addco]'),function(b){ b.addEventListener('click',function(){ addCompanyFromLead(b.getAttribute('data-addco')); }); });
+    }
+    function openSearchResult(type,id){ closeGlobalSearch(); if(type==='scheme'){activeTab='schemes';} else if(type==='innovator'){activeTab='innovators';} else {activeTab='companies';} setTab(); writeURL(); render(); if(type==='scheme')selectScheme(id); else if(type==='innovator')selectInnovator(id); else selectCompany(id); }
+    function runGlobalSearch(q,live){
+      lastSearchQ=q; var seq=++searchSeq;
+      if(q.length<2){ document.getElementById('searchResults').innerHTML=GS_HINT; return; }
+      var url='/api/search?q='+encodeURIComponent(q)+(live?'&live=true':'');
+      fetch(url).then(function(r){return r.json();}).then(function(data){
+        if(seq!==searchSeq)return;
+        if(!live && data.localTotal<5){
+          renderSearchResults(data,true); // keep local visible, show live loading
+          fetch('/api/search?q='+encodeURIComponent(q)+'&live=true').then(function(r){return r.json();}).then(function(d2){ if(seq!==searchSeq)return; renderSearchResults(d2,false); }).catch(function(){ if(seq===searchSeq)renderSearchResults(data,false); });
+        } else { renderSearchResults(data,false); }
+      }).catch(function(){ if(seq===searchSeq)document.getElementById('searchResults').innerHTML='<div class="empty" style="color:var(--text-muted);text-align:center;padding:24px">Search failed. Try again.</div>'; });
+    }
+    function addCompanyFromLead(name){ fetch('/api/companies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});}).then(function(res){ if(!res.ok){ showToast((res.j&&res.j.error)||'Could not add'); return; } closeGlobalSearch(); activeTab='companies'; setTab(); writeURL(); loadCompanies(); showToast('Added “'+name+'” — enriching now'); openEnrichProgress(res.j.id,function(){ selectCompany(res.j.id); }); }).catch(function(){ showToast('Request failed'); }); }
+    function addInnovatorFromLead(name){ closeGlobalSearch(); activeTab='innovators'; setTab(); writeURL(); render(); openAddInn(); document.getElementById('innName').value=name; showToast('Pick a domain, then Add & Research'); }
+    document.getElementById('globalSearchBtn').addEventListener('click',openGlobalSearch);
+    document.getElementById('searchClose').addEventListener('click',closeGlobalSearch);
+    document.getElementById('searchModal').addEventListener('click',function(e){ if(e.target===this)closeGlobalSearch(); });
+    document.getElementById('globalSearchInput').addEventListener('input',function(e){ var q=e.target.value.trim(); clearTimeout(searchTimer); searchTimer=setTimeout(function(){ runGlobalSearch(q,false); },300); });
+    document.addEventListener('keydown',function(e){ if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); openGlobalSearch(); } else if(e.key==='Escape'&&document.getElementById('searchModal').classList.contains('show')){ closeGlobalSearch(); } });
 
     // ─── Init ────────────────────────────────────────────────────────────────
     readURL(); setTab();

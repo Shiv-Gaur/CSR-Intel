@@ -24,7 +24,12 @@ export interface CompanyEntity {
   // Enriched fields (all confidence-wrapped)
   sector_focus: ConfidenceField<string[]>;
   geography_focus: ConfidenceField<string[]>;
-  csr_spend_cr: ConfidenceField<Record<string, number>>; // {FY: amount}
+  csr_spend_cr: ConfidenceField<Record<string, number>>; // {FY: amount} — ANNUAL programme spend only
+  /** One-off relief/disaster donations, kept apart from annual spend: a
+   *  Rs 1 Cr cheque to a CM Relief Fund is real CSR activity but says nothing
+   *  about the annual budget, and storing it as such put an identical 1 Cr on
+   *  three unrelated companies. */
+  notable_donations?: ConfidenceField<Array<{ amount_cr: number; context: string }>>;
   implementing_mode: ConfidenceField<ImplementingMode>;
   accepts_proposals: ConfidenceField<boolean>;
   required_registrations: ConfidenceField<string[]>;
@@ -103,9 +108,24 @@ export interface ConflictEntry {
 export type InnovatorType = 'startup' | 'individual' | 'research_institute';
 export type InnovatorDomain =
   | 'solid_waste' | 'plastic' | 'wastewater' | 'air_pollution' | 'e_waste'
-  | 'green_hydrogen' | 'circular_economy' | 'ai_medtech' | 'water_body';
+  | 'green_hydrogen' | 'circular_economy' | 'ai_medtech' | 'water_body'
+  // Added 2026-07-21. clean_air folds into air_pollution and renewable_missions
+  // into green_hydrogen (close enough) rather than adding distinct domains.
+  | 'semiconductors' | 'energy_security' | 'industry_4_0' | 'smart_agriculture';
 export type InnovationStage = 'ideation' | 'prototype' | 'pilot' | 'scale' | 'deployed';
 export type InnovatorStatus = 'active' | 'inactive' | 'verified';
+
+// Feasibility signals (Innovator-only). Robustness is a qualitative readiness
+// band; the rest are auto-detected best-effort during enrichment and manually
+// correctable (locked via data.feasibility_overrides).
+export type Robustness = 'strong' | 'moderate' | 'weak' | 'unknown';
+
+/** Land/electricity subsidy availability, with free-text notes. */
+export interface SubsidyLandElectricity {
+  land_subsidy: boolean | string | null;
+  electricity_subsidy: boolean | string | null;
+  notes: string | null;
+}
 
 export interface CircularityIndicators {
   closed_loop: boolean;
@@ -143,6 +163,18 @@ export interface InnovatorEntity {
   team_size: number | null;
   patents_filed: number;
   status: InnovatorStatus;
+
+  // ── Feasibility (Innovator-only, added 2026-07-21) ──────────────────────────
+  robustness_logistics: Robustness;                 // logistics / supply-chain readiness
+  robustness_geographic_scalability: Robustness;    // ease of scaling across geographies
+  indigenous_tech: boolean | null;                  // domestically developed vs foreign
+  govt_mission_alignment: string[];                 // e.g. ["PLI", "Make in India"]
+  subsidy_land_electricity: SubsidyLandElectricity;
+  capex_subsidy_available: boolean | null;
+  capex_subsidy_notes: string | null;
+  opex_subsidy_available: boolean | null;
+  opex_subsidy_notes: string | null;
+
   data: Record<string, unknown>;       // deep-research payload (founders, awards, sources…)
   created_at: string;
   last_updated_at: string;

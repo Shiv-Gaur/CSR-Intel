@@ -56,6 +56,9 @@ const JSON_COLUMNS = new Set([
   'technologies', 'target_sectors', 'target_geographies', 'keywords',
   // innovators
   'geography', 'circularity_indicators', 'mou_history', 'key_contacts',
+  'govt_mission_alignment', 'subsidy_land_electricity',
+  // search index
+  'search_meta',
 ]);
 
 function toParamValue(v: unknown): unknown {

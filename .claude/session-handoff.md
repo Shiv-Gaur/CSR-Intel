@@ -1,73 +1,98 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-14)
+# Session Handoff — CSR Funding Intelligence (2026-07-21)
 
 ## 1. Goal
-(1) Repo cleanup + push; (2) auto-update via electron-updater + GitHub
-Releases (v1.0.1). Both DONE, pushed: da362c7 (cleanup), 290304a (updater).
-Gates: build ✅, 136/136 tests ✅. Installer:
-release/CSR-Funding-Intelligence-Setup-1.0.1.exe (244.8 MB).
+Two features in one session, both DONE:
+- STAGE 1: expanded domain taxonomy (9→13) + new Innovator-only feasibility
+  fields (robustness, indigenous tech, govt-mission alignment, subsidies) with
+  deterministic auto-detection, a Feasibility detail tab, and two new filters.
+- STAGE 2: internal curated cross-entity search — local SQLite FTS5 first, live
+  trusted-source leads (Wikipedia/Screener/IndiaCSR/YourStory/Inc42) as fallback,
+  with one-click "Add as Innovator/Company".
+Gates: build ✅ (tsc clean), 188/188 tests ✅ (was 165; +23 new), migration RAN on
+the live DB, npm run status healthy (173 companies / 16 schemes / 5 innovators).
 
 ## 2. Completed (exact paths)
-- Cleanup (da362c7): DELETED src/tools/confidence-scorer.ts +
-  drift-compute.ts (+ their 2 test files; agents have own inline logic),
-  Dockerfile, docker-compose.yml, deploy.sh, scripts/dev-tools/ (4 files),
-  scripts/migrate-postgres-to-sqlite.ts. src/config.ts: databaseUrl + LLM
-  fields removed. .env.example + README.md rewritten. Tests 146→136.
-  WARNING: coordinator.agent, schemes-seed, innovator-research,
-  innovator-import LOOK orphaned but load via dynamic import() — keep.
-- Updater (290304a): electron/main.ts (autoUpdater: launch+4h checks packaged
-  only, Restart now/Later dialog, briefError() trims header dumps, ipcMain
-  app:version + updates:check); electron/preload.cjs (csrDesktop bridge);
-  src/dashboard/dashboard.html (gear-panel Check for updates, desktop-only);
-  electron-builder.yml (publish: github/Shiv-Gaur/CSR-Intel);
-  package.json (v1.0.1, "release" script --publish always + postrelease).
-- ABI guard: scripts/stage-electron-assets.ts deletes stale .forge-meta;
-  NEW scripts/verify-packaged-native.ts load-tests packaged better-sqlite3
-  under ELECTRON_RUN_AS_NODE at end of electron:dist/release.
+STAGE 1:
+- Domains 9→13 (added semiconductors, energy_security, industry_4_0,
+  smart_agriculture; clean_air→air_pollution, renewable_missions→green_hydrogen
+  via keywords): src/types/index.ts (InnovatorDomain union), src/utils/
+  innovator-match.ts (DOMAIN_SECTOR_MAP/DOMAIN_LABELS/DOMAIN_KEYWORDS),
+  src/dashboard/dashboard.ts (createInnovator Zod enum → INNOVATOR_DOMAINS),
+  src/dashboard/dashboard.html (DOMAINS array — feeds filter pills + Add-Innovator
+  dropdown).
+- New innovators columns + migration: src/db/index.ts runMigrations — added to the
+  CREATE TABLE (fresh DBs) AND idempotent PRAGMA-guarded ALTER (existing DBs; RAN
+  via `npm run db:migrate`). Columns: robustness_logistics,
+  robustness_geographic_scalability, indigenous_tech, govt_mission_alignment,
+  subsidy_land_electricity, capex_subsidy_available/_notes, opex_subsidy_available/
+  _notes. Registered JSON columns in src/db/sqlite.ts (govt_mission_alignment,
+  subsidy_land_electricity, search_meta). INNOVATOR_PATCH_COLS + InnovatorInsert
+  extended.
+- Auto-detection (NEW src/utils/feasibility.ts): detectIndigenousTech,
+  detectGovtMissionAlignment (14 canonical missions), detectSubsidies,
+  detectFeasibilitySignals. Wired into src/tools/innovator-research.ts
+  (enrichInnovator) — fill-only-if-empty, respects data.feasibility_overrides
+  locks, stores feasibility_detected_at.
+- Feasibility tab: src/dashboard/dashboard.html renderInnovatorDetail — added
+  'feasibility' tab, feasibilityHtml() (read summary + inline edit form),
+  wireFeasibility() (PUT + reload). Endpoint PUT /api/innovators/:id/feasibility
+  in dashboard.ts (feasibilitySchema, locks every touched field).
+- Filters: Indigenous Tech pills + Govt Mission multiselect in the Innovators tab
+  (F.indigenous / F.missions through readURL/writeURL/clearAll/renderFilters/
+  visibleInnovators/chips; DD_LABELS generalized for the missions dropdown).
+  flattenInnovator exposes camelCase feasibility fields + feasibilityOverrides.
+
+STAGE 2:
+- FTS5: src/db/index.ts — search_fts virtual table (created in runMigrations),
+  rebuildSearchIndex(), searchEntities(), toFtsQuery() (safe prefix-AND).
+- Live curated (NEW src/tools/curated-search.ts): curatedWebSearch() +
+  per-source fetchers (searchWikipedia/Screener/IndiaCsr/YourStory/Inc42),
+  dedupeLeads, normName. Promise.allSettled, fail-soft, round-robin interleave.
+- API: GET /api/search?q=[&live=true] in dashboard.ts (local always, live only
+  when live=true — frontend auto-fires live when localTotal<5).
+- UI: src/dashboard/dashboard.html — header 🔍 button (#globalSearchBtn, Ctrl+K),
+  #searchModal overlay, runGlobalSearch/renderSearchResults/searchLocalSection/
+  searchLiveSection, openSearchResult (→ detail panel), addCompanyFromLead
+  (POST /api/companies + enrich progress), addInnovatorFromLead (pre-fills
+  Add-Innovator modal).
+- Tests: NEW src/utils/__tests__/feasibility.test.ts (11),
+  src/db/__tests__/search-fts.test.ts (6, incl. "plastic waste"→Nepra),
+  src/tools/__tests__/curated-search.test.ts (6, axios mocked).
 
 ## 3. Decisions
-- CRITICAL BUG FOUND by installing for real: @electron/rebuild's .forge-meta
-  marker (node_modules/better-sqlite3/build/Release) survives the
-  post-packaging `npm rebuild better-sqlite3`, so every 2nd+ packaging run
-  SKIPPED the Electron-ABI rebuild and shipped Node-ABI (127 vs 148) →
-  packaged server crashed at boot (window up, blank page). First 1.0.1 build
-  shipped broken; fixed + gated. Every packaging log must show "ABI verified".
-- "release" script = full chain (build → electron:build → stage → publish
-  always → verify), NOT bare `electron-builder --publish=always` (would
-  package stale dist/).
-- Unsigned auto-update on Windows: updates do NOT retrigger SmartScreen (no
-  Mark-of-the-Web on electron-updater's own downloads; unsigned apps skip the
-  signature-match check). Only the first browser download warns. This is
-  documented behaviour — full round-trip NOT yet tested (needs 2 releases).
-- User's REAL install is E:\DRIIV\CSR Funding Intelligence (they installed
-  1.0.0 manually there; NSIS remembers the dir). Never uninstall it in tests.
-  Currently on fixed 1.0.1, verified healthy (173 companies, ~14s startup).
-- Verified live via CDP (--remote-debugging-port=9222 + puppeteer): gear
-  button visible only in desktop shell, click → status text, re-enables,
-  graceful 404 handling; launch-time auto-check also fired.
+- Robustness (logistics + geo scalability) is NOT auto-detected — too subjective
+  for keyword matching; defaults 'unknown', set manually via the tab.
+- Subsidy/indigenous detectors set true or leave null, NEVER false — a source not
+  mentioning a subsidy is not evidence of its absence. indigenous ties → null.
+- Saving the Feasibility form locks EVERY field on it (data.feasibility_overrides),
+  not just changed ones — the user reviewed the whole form, so it's asserted.
+- FTS index is rebuilt on each /api/search call (cheap at hundreds of rows) —
+  always fresh, no sync bugs. Revisit if entity count grows into 10k+.
+- Live search runs server-side only with &live=true so a keystroke never blocks on
+  the network; frontend debounces 300ms and auto-triggers live at localTotal<5.
+- curated-search does its OWN raw axios+cheerio (fetchAuto returns stripped text,
+  unusable for link extraction). Wikipedia OpenSearch + Screener API are the
+  reliable clean-name sources; IndiaCSR/YourStory/Inc42 are best-effort scrapes.
 
 ## 4. In progress
-Nothing half-done. Working tree clean, main in sync with origin. App closed,
-port 3000 free. Memory csr-db-environment.md updated (SQLite, E:\DRIIV,
-private repo, ABI trap).
+Nothing half-done. Working tree has the feature edits (uncommitted — user has not
+asked to commit). Live demo server (scratchpad/serve.mjs on :3939) was stopped.
+The demo PUT that populated Chakr Innovation's feasibility was RESET back to
+defaults afterwards (made-up values, no source) — the live DB is clean.
 
 ## 5. Next steps (first prompts for next session)
-1. After the user makes the repo public + sets GH_TOKEN: "Run npm run release
-   to publish 1.0.1, then bump to 1.0.2 and do a real update round-trip test
-   on the E:\DRIIV install" — closes the only untested link.
-2. "Build financial data extraction (revenue, net profit, CSR budget)" — last
-   open tracker item; estimateSpendFromProfit in src/utils/inference.ts.
-3. "Add official websites for remaining ~140 companies to
-   src/tools/known-urls.ts" — widens tier-1 contact coverage (~31 have domains).
+1. "Commit Stage 1 + Stage 2" if the user wants it in git (not done — awaiting ask).
+2. "Wire robustness auto-hints" — optional: infer logistics/geo scalability from
+   team_size/geography spread as a low-confidence starting guess.
+3. Pre-existing open item: "Build financial data extraction (revenue, net profit,
+   CSR budget)" — still the last open tracker item (inference.ts).
 
 ## 6. Blockers (need human input)
-- Repo github.com/Shiv-Gaur/CSR-Intel is PRIVATE (anon API 404s) —
-  auto-update feed is dead for users until the USER flips visibility
-  (Settings → General → Danger Zone). gh CLI unauthenticated here.
-- GH_TOKEN needed for `npm run release` (fine-grained PAT, Contents
-  read+write on CSR-Intel). Steps documented in README.md.
-- Installer unsigned → SmartScreen on first browser download; needs a
-  code-signing cert to remove.
-- Search-free mode still on; SBI/HDFC-class bot walls beat even Puppeteer.
-- No hot reload: restart `npm run dev` after src edits; kill the port-3000
-  PID first (Get-NetTCPConnection -LocalPort 3000) — orphaned tsx children
-  recur, and the Electron shell silently attaches to any port-3000 server.
+- Live curated search depends on outbound network; in this env Wikipedia + Screener
+  respond, the WordPress scrapes (IndiaCSR/YourStory/Inc42) often return nothing
+  (bot walls / JS shells) — fail-soft by design, but lead quality varies by source
+  reachability. No API keys added (search-free mode unchanged).
+- (Carried) Repo github.com/Shiv-Gaur/CSR-Intel still PRIVATE → auto-update feed
+  dead until the user flips visibility; GH_TOKEN needed for `npm run release`.
+- No hot reload: restart after src edits; kill the port PID first (orphaned tsx
+  children recur; the Electron shell attaches to any server already on port 3000).

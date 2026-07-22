@@ -6,6 +6,7 @@
 import { gatherSourceText } from './free-sources.js';
 import { extractGeographies, generateSummary, extractExecutiveContacts, mergeExecutiveContacts, type ExecutiveContact } from '../utils/extractor.js';
 import { detectCircularityIndicators, scoreSustainability } from '../utils/sustainability.js';
+import { detectFeasibilitySignals, type FeasibilitySignals } from '../utils/feasibility.js';
 import { inferTRL } from '../utils/trl.js';
 import { DOMAIN_KEYWORDS } from '../utils/innovator-match.js';
 import { getInnovatorById, updateInnovator } from '../db/index.js';
@@ -38,6 +39,7 @@ export interface InnovatorResearch {
   key_contacts: ExecutiveContact[];
   geographies: string[];
   domain_guess: InnovatorDomain | null;
+  feasibility: FeasibilitySignals;
   source_urls: string[];
   combined_chars: number;
 }
@@ -125,6 +127,7 @@ export async function researchInnovator(
     key_contacts: keyContacts,
     geographies: extractInnovatorGeography(combined),
     domain_guess: guessDomain(combined),
+    feasibility: detectFeasibilitySignals(combined),
     source_urls: perSource.filter(s => s.success).map(s => s.url),
     combined_chars: combined.length,
   };
@@ -189,6 +192,41 @@ export async function enrichInnovator(id: string): Promise<boolean> {
     circular_economy: !!existing.circular_economy || research.circularity_indicators.circular_economy,
   };
   patch.sustainability_score = Math.max(row.sustainability_score ?? 0, research.sustainability_score);
+
+  // ── Feasibility signals (best-effort, low-confidence) ────────────────────────
+  // Only fill fields that are still empty/unknown AND not manually locked. Users
+  // correct these via the Feasibility tab; corrections lock the field in
+  // data.feasibility_overrides so re-enrichment never overwrites them.
+  const locks = (row.data?.feasibility_overrides || {}) as Record<string, boolean>;
+  const f = research.feasibility;
+  if (!locks.indigenous_tech && row.indigenous_tech == null && f.indigenous_tech != null) {
+    patch.indigenous_tech = f.indigenous_tech;
+  }
+  if (!locks.govt_mission_alignment && f.govt_mission_alignment.length) {
+    const existing = Array.isArray(row.govt_mission_alignment) ? row.govt_mission_alignment : [];
+    patch.govt_mission_alignment = [...new Set([...existing, ...f.govt_mission_alignment])];
+  }
+  if (!locks.subsidy_land_electricity) {
+    const cur = (row.subsidy_land_electricity || {}) as Record<string, unknown>;
+    const det = f.subsidy_land_electricity;
+    const land = cur.land_subsidy != null ? cur.land_subsidy : det.land_subsidy;
+    const power = cur.electricity_subsidy != null ? cur.electricity_subsidy : det.electricity_subsidy;
+    if (land != null || power != null) {
+      patch.subsidy_land_electricity = {
+        land_subsidy: land, electricity_subsidy: power,
+        notes: (cur.notes as string) ?? det.notes,
+      };
+    }
+  }
+  if (!locks.capex_subsidy_available && row.capex_subsidy_available == null && f.capex_subsidy_available != null) {
+    patch.capex_subsidy_available = f.capex_subsidy_available;
+    patch.capex_subsidy_notes = f.capex_subsidy_notes;
+  }
+  if (!locks.opex_subsidy_available && row.opex_subsidy_available == null && f.opex_subsidy_available != null) {
+    patch.opex_subsidy_available = f.opex_subsidy_available;
+    patch.opex_subsidy_notes = f.opex_subsidy_notes;
+  }
+  (patch.data as Record<string, unknown>).feasibility_detected_at = new Date().toISOString();
 
   await updateInnovator(id, patch);
   endProgress(id);

@@ -1,11 +1,12 @@
 import 'dotenv/config';
 import {
-  claimNextTask, completeTask, failTask,
+  claimNextTask, claimNextTaskForEntity, completeTask, failTask,
   getEntityById, updateEntityData, updateEntityStatus,
-  addToHumanReview, enqueueTask, getManualOverrides, getPool
+  addToHumanReview, enqueueTask, getManualOverrides, getPool,
+  countEntitiesWithSpendValue,
 } from '../db/index.js';
 import {
-  extractSectors, extractGeographies, extractSpend, generateSummary,
+  extractSectors, extractGeographies, extractSpend, extractNotableDonations, generateSummary,
   extractEmail, extractRegistrations, detectAcceptsProposals, scoreCompany,
   attributeAcrossSources, extractExecutiveContacts, mergeExecutiveContacts,
   applyContactOverrides, pickOfficialContact,
@@ -28,15 +29,39 @@ const MIN_COMBINED_CHARS = 100;
 /**
  * Run the deterministic extractors once over the combined text from all sources
  * and shape the result into the ConfidenceField record the DB/merge expects.
+ *
+ * CSR spend is the exception: it is extracted PER SOURCE, not from the combined
+ * corpus, with the company-name proximity gate active — aggregator search pages
+ * (IndiaCSR "?s=", news feeds) mix many companies' figures, and a combined-text
+ * extraction attributed whichever figure came first to this company AND stamped
+ * it with the wrong source_url. The first source that yields a gated figure
+ * wins, and that source's URL is recorded on the field.
  */
-function buildExtractedFields(combined: string, primaryUrl: string, entityName?: string, companyDomain?: string | null): Partial<CompanyEntity> {
+function buildExtractedFields(
+  combined: string,
+  primaryUrl: string,
+  entityName: string,
+  companyDomain?: string | null,
+  sources: Array<{ url: string; text: string }> = [],
+): Partial<CompanyEntity> {
   const now = new Date().toISOString();
   const cf = <T>(value: T | null, confidence: ConfidenceLevel): ConfidenceField<T> =>
     ({ value, confidence, source_url: primaryUrl, extracted_at: now });
 
   const sectors = extractSectors(combined);
   const geographies = extractGeographies(combined);
-  const spend = extractSpend(combined);
+  const perSource = sources.length ? sources : [{ url: primaryUrl, text: combined }];
+  let spend: number | null = null;
+  let spendUrl = primaryUrl;
+  for (const s of perSource) {
+    const found = extractSpend(s.text, entityName);
+    if (found !== null) { spend = found; spendUrl = s.url; break; }
+  }
+  // One-off relief donations are collected across ALL sources rather than
+  // stopping at the first hit — they are a list, not a single best value.
+  const donations = perSource.flatMap(s => extractNotableDonations(s.text, entityName));
+  const donationsDeduped = donations.filter(
+    (d, i) => donations.findIndex(o => o.amount_cr === d.amount_cr) === i);
   // Combined corpus mixes source-site boilerplate with company text — the
   // relevance gate stops publisher mailboxes becoming the company's contact.
   const email = extractEmail(combined, entityName, companyDomain);
@@ -46,7 +71,11 @@ function buildExtractedFields(combined: string, primaryUrl: string, entityName?:
   const extracted: Partial<CompanyEntity> = {
     sector_focus: cf<string[]>(sectors.length ? sectors : null, sectors.length ? 'medium' : 'low'),
     geography_focus: cf<string[]>(geographies.length ? geographies : null, geographies.length ? 'medium' : 'low'),
-    csr_spend_cr: cf<Record<string, number>>(spend !== null ? { latest: spend } : null, spend !== null ? 'medium' : 'low'),
+    csr_spend_cr: spend !== null
+      ? { value: { latest: spend }, confidence: 'medium', source_url: spendUrl, extracted_at: now }
+      : cf<Record<string, number>>(null, 'low'),
+    notable_donations: cf<Array<{ amount_cr: number; context: string }>>(
+      donationsDeduped.length ? donationsDeduped : null, donationsDeduped.length ? 'medium' : 'low'),
     required_registrations: cf<string[]>(registrations.length ? registrations : null, registrations.length ? 'medium' : 'low'),
     contact_email: cf<string | null>(email, email ? 'high' : 'low'),
     accepts_proposals: cf<boolean>(acceptsProposals, acceptsProposals !== null ? 'medium' : 'low'),
@@ -97,8 +126,13 @@ async function enrichStockAndNews(companyName: string): Promise<{
 
 // ─── Process a single enrichment task ────────────────────────────────────────
 
-export async function processEnrichmentTask(): Promise<boolean> {
-  const task = await claimNextTask('enrich');
+/** Process ONE enrichment task and return whether there was work.
+ *  `onlyEntityId` scopes the claim to that entity — the CLI's `--entity-id`
+ *  path passes it so a targeted run cannot wander into the queue backlog. */
+export async function processEnrichmentTask(onlyEntityId?: string): Promise<boolean> {
+  const task = onlyEntityId
+    ? await claimNextTaskForEntity('enrich', onlyEntityId)
+    : await claimNextTask('enrich');
   if (!task) return false;
 
   const entityId = task.entity_id!;
@@ -150,7 +184,10 @@ export async function processEnrichmentTask(): Promise<boolean> {
 
     // Step 4 — deterministic extraction over the combined corpus, plus per-source
     // attribution (which source found which sector/geo) and agreement confidence.
-    const extracted = buildExtractedFields(combined, usable[0].url, entityName, sourceEntity.website);
+    const extracted = buildExtractedFields(
+      combined, usable[0].url, entityName, sourceEntity.website,
+      usable.map(s => ({ url: s.url, text: s.text })),
+    );
     const attribution = attributeAcrossSources(usable.map(s => ({ label: s.label, text: s.text })));
     // Lift sector_focus confidence to the strongest cross-source agreement.
     const bestAgreement = Object.values(attribution.sectorConfidence);
@@ -232,6 +269,20 @@ export async function processEnrichmentTask(): Promise<boolean> {
     const geographies = (extracted.geography_focus?.value as string[] | null) ?? [];
     const spendMap = extracted.csr_spend_cr?.value as Record<string, number> | null;
     const spend = spendMap && Object.keys(spendMap).length ? Math.max(...Object.values(spendMap)) : null;
+    // Duplicate-figure tripwire: the exact same spend showing on 3+ companies is
+    // the signature of source-page boilerplate leaking through (44.44-Cr class of
+    // bug), not coincidence. Flag loudly in logs — the name-proximity gate in
+    // extractSpend is the actual defense; this catches anything that slips past.
+    if (spend !== null) {
+      const sameValueOthers = await countEntitiesWithSpendValue(spend, entityId);
+      if (sameValueOthers >= 2) {
+        logger.warn('SUSPICIOUS DUPLICATE SPEND — same figure already on other companies; likely shared source boilerplate', {
+          entityName, spendCr: spend, otherCompaniesWithSameValue: sameValueOthers,
+          spendSourceUrl: extracted.csr_spend_cr?.source_url,
+        });
+      }
+    }
+
     const email = (extracted.contact_email?.value as string | null) ?? null;
     const dataScore = scoreCompany({
       sectors, geographies, spend,

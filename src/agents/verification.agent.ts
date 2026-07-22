@@ -43,7 +43,7 @@ function deterministicVerify(
 
   const bSectors = extractSectors(sourceB.content);
   const bGeos = extractGeographies(sourceB.content);
-  const bSpend = extractSpend(sourceB.content);
+  const bSpend = extractSpend(sourceB.content, entity.name);
 
   const conflict = (field: string, a: unknown, b: unknown) =>
     conflict_fields.push({ field, source_a_value: a, source_a_url: aUrl, source_b_value: b, source_b_url: sourceB.url, detected_at: now });

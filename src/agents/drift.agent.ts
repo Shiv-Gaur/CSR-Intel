@@ -140,7 +140,7 @@ async function processDriftTask(): Promise<boolean> {
         url: yc.url,
         sectors: extractSectors(yc.content),
         geographies: extractGeographies(yc.content),
-        spend: extractSpend(yc.content),
+        spend: extractSpend(yc.content, entityName),
       }))
       .sort((a, b) => a.year - b.year);
 

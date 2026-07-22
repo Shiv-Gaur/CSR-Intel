@@ -3,6 +3,7 @@
 // Mirrors the field shapes the LLM used to produce so the DB schema is unchanged.
 
 import { DOMAIN_KEYWORDS, DOMAIN_LABELS } from './innovator-match.js';
+import { logger } from './logger.js';
 import type { InnovatorDomain } from '../types/index.js';
 
 // ─── Regex helper ─────────────────────────────────────────────────────────────
@@ -123,23 +124,218 @@ export function extractGeographies(text: string): string[] {
 // CSR spend. A figure is accepted only if a CSR keyword appears within ~100
 // chars and a revenue keyword does not dominate that same window.
 const SPEND_CSR_CONTEXT = /(csr|social responsibility|community investment|foundation|spent|allocated|committed|donated|contribution)/i;
-const SPEND_REVENUE_CONTEXT = /(revenue|profit|turnover|ebitda)/i;
+// Not-CSR money. A figure whose context is dominated by any of these is some
+// other corporate number — revenue, a bond issue, a capex plan, a loan book —
+// that happens to share the page with CSR reporting.
+const SPEND_REVENUE_CONTEXT = /(revenue|profit|turnover|ebitda|market cap|valuation|borrowing|bond|debenture|invest|capex|loan|disburse|order book|ipo|fundrais|net worth|assets under management)/i;
+
+// Publisher/site names that contain "CSR" — on these domains EVERY article
+// carries the string in its byline ("by India CSR", "IndiaCSR Network"), which
+// satisfied SPEND_CSR_CONTEXT unconditionally and made the CSR-context check a
+// no-op. That is how a green-infrastructure BOND (Bank of Baroda, ₹10,000 Cr),
+// a state INVESTMENT (Godrej, ₹10,000 Cr) and a national FOREIGN-BORROWINGS
+// statistic (₹27,556 Cr) were all stored as CSR spend. Stripped before the
+// context test so only the article's own words can establish CSR relevance.
+const PUBLISHER_BYLINE = /\b(india\s*csr(\s*network)?|csr\s*journal|csr\s*times|csr\s*box|csr\s*mandate)\b/ig;
+
+// A one-off donation is NOT annual CSR programme spend. "Bank of Baroda Donates
+// Rs 1 Crore to Uttarakhand CM Relief Fund" is a real, correctly-attributed CSR
+// figure that says nothing about the company's annual budget — and storing it as
+// `csr_spend_cr` is what put an identical 1 Cr on BoB, Canara Bank and Fortis.
+// Round-number relief donations repeat across unrelated companies for the same
+// reason boilerplate does: everyone gives the same tidy sum to the same appeal.
+// The RECIPIENT is what marks a one-off, not the verb. "Donated Rs 8 crore to
+// the foundation" is a company funding its own CSR foundation — ordinary
+// programme spend — whereas the same verb pointed at a relief fund is a
+// one-time cheque. Keying on the verb alone misclassified the former.
+const RELIEF_RECIPIENT = /(relief fund|disaster relief|pm ?cares|cm relief|chief minister.{0,25}relief|flood relief|earthquake relief|cyclone relief|drought relief|immediate relief|war (?:effort|fund)|calamity)/i;
+// Weak signals — only count when paired with an explicit one-time framing.
+const DONATION_VERB = /(donat(?:e|es|ed|ion)|contribut(?:e|es|ed|ion) towards|handed over|presented a cheque)/i;
+const ONE_TIME_MARKER = /(one[- ]time|one[- ]off|special contribution|in response to the|towards the victims)/i;
+
+/** A single relief/disaster donation rather than an annual programme total. */
+function isOneOffDonation(window: string): boolean {
+  if (ANNUAL_SPEND_CONTEXT.test(window)) return false;   // annual framing always wins
+  return RELIEF_RECIPIENT.test(window) || (DONATION_VERB.test(window) && ONE_TIME_MARKER.test(window));
+}
+
+// Strong positive evidence that a figure IS the annual programme total. When
+// both fire, the annual reading wins — "donated Rs 400 crore under its FY24 CSR
+// budget" is a budget statement that happens to use the verb "donated".
+const ANNUAL_SPEND_CONTEXT = /(annual csr|csr budget|csr obligation|csr expenditure|total csr|fy\s?'?\d{2,4}|fiscal(?: year)?|financial year|spent .{0,30}on csr|allocated .{0,30}(for|under) csr|csr spend(?:ing)? (?:of|for|in)|under csr in)/i;
+
+/** Real Indian CSR spend is mandated at ~2% of net profit; even the largest
+ *  spenders (Reliance, TCS, HDFC) land in the hundreds of crores and the
+ *  all-time top of the table is under ~2,000 Cr. A four-or-five-figure crore
+ *  number is therefore never CSR — it is revenue, market cap, a bond, or a
+ *  government programme outlay that leaked in from the same page. Rejected
+ *  outright and logged for manual review: "Not found" beats a fabricated
+ *  figure, per the data-integrity standard. */
+export const SPEND_PLAUSIBILITY_CEILING_CR = 5000;
+
+/** Distinctive tokens of a company name (plus its acronym) for proximity gates.
+ *  Same recipe as the executive-contact aggregator gate: words ≥4 chars minus
+ *  generic stopwords, the initials acronym when ≥3 chars, and the single word
+ *  itself for one-word names (ITC, GAIL). */
+export function entityNameTokens(entityName: string): string[] {
+  const words = entityName.split(/\s+/).filter(Boolean);
+  const tokens = words.map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length >= 4 && !ENTITY_TOKEN_STOPWORDS.has(w));
+  if (words.length >= 2) {
+    const acronym = words.map(w => w[0]).join('').toLowerCase();
+    if (acronym.length >= 3) tokens.push(acronym);
+  }
+  if (words.length === 1 && words[0].length >= 3) tokens.push(words[0].toLowerCase());
+  return tokens;
+}
+
+/** Whole-word matchers for entity-name tokens, for gates that search prose.
+ *  Substring matching false-accepts short names and acronyms — "ITC" hides
+ *  inside "switch" and "pitch", "GAIL" inside "prevailing" — which would let an
+ *  unrelated company's figure through on any page containing an ordinary
+ *  English word. Gates that search a DOMAIN (emailRelatesToCompany) keep
+ *  substring matching instead: "aartiindustries.com" has no word boundaries. */
+export function entityTokenMatchers(tokens: string[]): RegExp[] {
+  return tokens.map(t => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
+}
+
+/** Text of the sentence containing [start, end), for same-sentence attribution
+ *  gates. Breaks on . ! ? newline and the separators scraped listings use in
+ *  place of punctuation (| • —). Scraped PDF text can run for pages without any
+ *  break, so the span is also hard-capped at ±300 chars — a name further away
+ *  than that is not attribution, it is coincidence. */
+const SENTENCE_BREAK = /[.!?\n|•—]/;
+function sentenceAround(text: string, start: number, end: number): string {
+  let from = Math.max(0, start - 300);
+  for (let i = start - 1; i >= from; i--) {
+    if (SENTENCE_BREAK.test(text[i])) { from = i + 1; break; }
+  }
+  let to = Math.min(text.length, end + 300);
+  for (let i = end; i < to; i++) {
+    if (SENTENCE_BREAK.test(text[i])) { to = i; break; }
+  }
+  return text.slice(from, to);
+}
 
 // Handles: "Rs. 45 crore", "INR 120 Cr", "₹45 crore", "45.2 crores", "Rs 12.5 Cr".
-export function extractSpend(text: string): number | null {
-  if (!text) return null;
+//
+// `entityName` (optional but strongly recommended): source pages are often
+// aggregator search/listing pages (IndiaCSR "?s=", Moneycontrol, news feeds)
+// that mix MANY companies' CSR figures on one page. Whatever article snippet
+// happened to be listed there used to leak in as the researched company's
+// spend — the same figure then appeared on every company enriched that day
+// (the "44.44 Cr on four unrelated companies" incident). With `entityName`
+// given, a figure only counts when a distinctive token of the company name
+// appears in the SAME SENTENCE as it. Proximity alone is not enough: a search
+// page echoes the queried name in its own header ("Search results for: X"),
+// which sits within any character window of every article listed below it —
+// the exact page shape this gate exists to reject. A rejected real figure shows
+// as "Not found", which the data-integrity standard prefers over a fabricated one.
+export interface SpendCandidate {
+  /** Figure in crore. */
+  valueCr: number;
+  /** `annual` — a programme/budget total, eligible for csr_spend_cr.
+   *  `one_off` — a relief/disaster donation, eligible only for notable_donations. */
+  kind: 'annual' | 'one_off';
+  /** Context-strength score; the highest-scoring annual candidate wins. */
+  strength: number;
+  /** Trimmed local context, for storage alongside a donation and for logs. */
+  context: string;
+}
+
+// Scoring window for context strength — deliberately tighter than a sentence.
+// Scraped listings run headline and body together with no punctuation between
+// them, so sentenceAround() can return a span covering several figures at once
+// and score them all identically.
+const STRENGTH_WINDOW = 120;
+
+/** How strongly the surrounding text says "this is the annual CSR total".
+ *  A figure quoted with a fiscal year AND measured against a stated obligation
+ *  is a fuller-context statement than a bare number in a headline — that is the
+ *  IndiGo case, where the headline said 13.96 Cr and the body of the same
+ *  article said "spent Rs 139.68 crores on CSR in FY 2025, exceeding its Rs 11
+ *  crore obligation". */
+function contextStrength(window: string, after: string): number {
+  let score = 0;
+  if (/fy\s?'?\d{2,4}|fiscal(?: year)?|financial year|\bin \d{4}\b/i.test(window)) score += 2;
+  if (/(obligation|mandated|statutory|required|prescribed|2 ?%|two per ?cent|target)/i.test(window)) score += 2;
+  if (/(spent|expenditure|budget|total|allocated|outlay)/i.test(window)) score += 1;
+  // A figure that IS the obligation ("exceeding its Rs 11 crore obligation") is
+  // the benchmark being compared against, not the amount spent.
+  if (/^\s*(?:crores?|cr)?\s*(?:obligation|target|requirement|mandate|threshold)/i.test(after)) score -= 4;
+  return score;
+}
+
+/** Every CSR-looking figure on the page that survives the attribution, revenue
+ *  and plausibility gates, classified and scored. Callers pick what they need:
+ *  `extractSpend` takes the strongest annual figure, `extractNotableDonations`
+ *  takes the one-off donations. */
+export function extractSpendCandidates(text: string, entityName?: string): SpendCandidate[] {
+  if (!text) return [];
+  const tokens = entityName ? entityNameTokens(entityName) : [];
+  const matchers = entityTokenMatchers(tokens);
+  const textLc = tokens.length ? text.toLowerCase() : '';
+  const out: SpendCandidate[] = [];
   const re = /(?:rs\.?|inr|₹)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:crores?|cr)\b/ig;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     // Context window: ~60 chars before the figure (where the label usually sits)
     // through ~40 chars after — keeps the keyword "within 100 characters".
-    const ctx = text.slice(Math.max(0, match.index - 60), re.lastIndex + 40);
+    // The publisher byline is stripped FIRST: it must not be able to satisfy
+    // either the CSR test below or the `csr` escape hatch on the revenue test.
+    const ctx = text.slice(Math.max(0, match.index - 60), re.lastIndex + 40).replace(PUBLISHER_BYLINE, ' ');
     if (!SPEND_CSR_CONTEXT.test(ctx)) continue;          // not a CSR figure
     if (SPEND_REVENUE_CONTEXT.test(ctx) && !/(csr|social responsibility|community investment)/i.test(ctx)) continue; // revenue-dominated
+    if (matchers.length) {
+      const sentence = sentenceAround(textLc, match.index, re.lastIndex);
+      if (!matchers.some(r => r.test(sentence))) continue;  // figure belongs to some OTHER company on this page
+    }
     const num = parseFloat(match[1].replace(/,/g, ''));
-    if (!Number.isNaN(num)) return num;
+    if (Number.isNaN(num)) continue;
+    if (num > SPEND_PLAUSIBILITY_CEILING_CR) {
+      logger.warn('IMPLAUSIBLE CSR SPEND REJECTED — figure exceeds ceiling; almost certainly revenue/market-cap/bond leaking from the source page', {
+        entityName: entityName ?? '(none)', figureCr: num, ceilingCr: SPEND_PLAUSIBILITY_CEILING_CR,
+        context: ctx.replace(/\s+/g, ' ').trim().slice(0, 200),
+      });
+      continue;
+    }
+    const window = text
+      .slice(Math.max(0, match.index - STRENGTH_WINDOW), re.lastIndex + STRENGTH_WINDOW)
+      .replace(PUBLISHER_BYLINE, ' ');
+    const after = text.slice(re.lastIndex, re.lastIndex + 30);
+    const oneOff = isOneOffDonation(window);
+    out.push({
+      valueCr: num,
+      kind: oneOff ? 'one_off' : 'annual',
+      strength: contextStrength(window, after),
+      context: window.replace(/\s+/g, ' ').trim().slice(0, 240),
+    });
   }
-  return null;
+  return out;
+}
+
+/** The company's annual CSR spend: the highest-context-strength `annual`
+ *  candidate. Ties keep the earlier (first-match) figure, preserving the
+ *  historical behaviour. One-off donations are excluded entirely — see
+ *  `extractNotableDonations`. */
+export function extractSpend(text: string, entityName?: string): number | null {
+  const annual = extractSpendCandidates(text, entityName).filter(c => c.kind === 'annual');
+  if (!annual.length) return null;
+  let best = annual[0];
+  for (const c of annual) if (c.strength > best.strength) best = c;
+  return best.valueCr;
+}
+
+/** One-off relief/disaster donations, kept as their own list. Genuinely useful
+ *  data — it just must not be confused with an annual budget. */
+export function extractNotableDonations(
+  text: string, entityName?: string,
+): Array<{ amount_cr: number; context: string }> {
+  const seen = new Set<number>();
+  return extractSpendCandidates(text, entityName)
+    .filter(c => c.kind === 'one_off')
+    .filter(c => (seen.has(c.valueCr) ? false : (seen.add(c.valueCr), true)))
+    .map(c => ({ amount_cr: c.valueCr, context: c.context }));
 }
 
 // ─── Summary — first 300 chars, no generation ────────────────────────────────
@@ -412,16 +608,8 @@ export function emailRelatesToCompany(email: string, entityName: string, company
     const official = companyDomain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
     if (domain === official || domain.endsWith(`.${official}`) || official.endsWith(`.${domain}`)) return true;
   }
-  const words = entityName.split(/\s+/).filter(Boolean);
-  const tokens = words.map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
-    .filter(w => w.length >= 4 && !ENTITY_TOKEN_STOPWORDS.has(w));
-  if (words.length >= 2) {
-    const acronym = words.map(w => w[0]).join('').toLowerCase();
-    if (acronym.length >= 3) tokens.push(acronym);
-  }
-  if (words.length === 1 && words[0].length >= 3) tokens.push(words[0].toLowerCase());
   const domainBody = domain.split('.').slice(0, -1).join('.'); // drop TLD
-  return tokens.some(t => domainBody.includes(t));
+  return entityNameTokens(entityName).some(t => domainBody.includes(t));
 }
 
 // Aggregator/search pages mix MANY companies on one page (LinkedIn "people also

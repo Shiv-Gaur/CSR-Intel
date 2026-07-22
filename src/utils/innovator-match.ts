@@ -16,6 +16,11 @@ export const DOMAIN_SECTOR_MAP: Record<InnovatorDomain, string[]> = {
   green_hydrogen: ['Environment', 'Technology'],
   ai_medtech: ['Healthcare', 'Technology'],
   circular_economy: ['Environment', 'Rural Development'],
+  // ── Added 2026-07-21 ──
+  semiconductors: ['Technology', 'Skill Development'],
+  energy_security: ['Environment', 'Technology'],
+  industry_4_0: ['Technology', 'Skill Development'],
+  smart_agriculture: ['Rural Development', 'Technology'],
 };
 
 // Human-readable labels for the UI ("solid_waste" → "Solid Waste").
@@ -23,6 +28,8 @@ export const DOMAIN_LABELS: Record<InnovatorDomain, string> = {
   solid_waste: 'Solid Waste', plastic: 'Plastic', wastewater: 'Wastewater',
   air_pollution: 'Air Pollution', e_waste: 'E-Waste', green_hydrogen: 'Green Hydrogen',
   circular_economy: 'Circular Economy', ai_medtech: 'AI MedTech', water_body: 'Water Body',
+  semiconductors: 'Semiconductors', energy_security: 'Energy Security',
+  industry_4_0: 'Industry 4.0', smart_agriculture: 'Smart Agriculture',
 };
 
 // Domain vocabulary used for the +10 keyword bonus: does the funder's own text
@@ -31,12 +38,19 @@ export const DOMAIN_KEYWORDS: Record<InnovatorDomain, string[]> = {
   solid_waste: ['solid waste', 'waste management', 'municipal waste', 'garbage', 'landfill'],
   plastic: ['plastic', 'polymer waste', 'single-use'],
   wastewater: ['wastewater', 'waste water', 'sewage', 'effluent', 'water treatment'],
-  air_pollution: ['air pollution', 'air quality', 'emission', 'particulate', 'smog'],
+  // "clean air" folds into air_pollution — same problem space, no distinct domain.
+  air_pollution: ['air pollution', 'air quality', 'clean air', 'emission', 'particulate', 'smog'],
   e_waste: ['e-waste', 'electronic waste', 'battery recycling'],
-  green_hydrogen: ['green hydrogen', 'hydrogen', 'clean fuel', 'electrolyser', 'electrolyzer'],
+  // "renewable missions" folds into green_hydrogen (clean-energy fuel/production).
+  green_hydrogen: ['green hydrogen', 'hydrogen', 'clean fuel', 'electrolyser', 'electrolyzer', 'renewable mission'],
   circular_economy: ['circular economy', 'circularity', 'recycl', 'upcycl', 'closed loop', 'zero waste'],
   ai_medtech: ['medtech', 'medical device', 'diagnostic', 'telemedicine', 'health technology', 'ai in health'],
   water_body: ['water body', 'lake', 'river', 'pond', 'water rejuvenation', 'groundwater'],
+  // ── Added 2026-07-21 ──
+  semiconductors: ['semiconductor', 'microchip', 'chip fab', 'wafer', 'integrated circuit', 'foundry', 'fabless'],
+  energy_security: ['energy security', 'energy storage', 'battery storage', 'power grid', 'grid stability', 'fuel security'],
+  industry_4_0: ['industry 4.0', 'smart manufacturing', 'industrial iot', 'digital twin', 'factory automation', 'robotics'],
+  smart_agriculture: ['smart agriculture', 'precision farming', 'agritech', 'agri-tech', 'crop monitoring', 'agriculture technology'],
 };
 
 // NCR aliases — "both in Delhi/NCR" counts as a geography match.
