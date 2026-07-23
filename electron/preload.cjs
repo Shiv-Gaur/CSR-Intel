@@ -16,4 +16,9 @@ contextBridge.exposeInMainWorld('csrDesktop', {
   onUpdateStatus: (cb) => {
     ipcRenderer.on('updates:status', (_event, text) => cb(String(text)));
   },
+  // Structured state for the sidebar update strip: {state, version}.
+  onUpdateState: (cb) => {
+    ipcRenderer.on('updates:state', (_event, payload) => cb(payload));
+  },
+  restartToUpdate: () => ipcRenderer.invoke('updates:restart'),
 });

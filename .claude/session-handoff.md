@@ -1,98 +1,85 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-21)
+# Session Handoff — CSR Funding Intelligence (2026-07-23)
 
 ## 1. Goal
-Two features in one session, both DONE:
-- STAGE 1: expanded domain taxonomy (9→13) + new Innovator-only feasibility
-  fields (robustness, indigenous tech, govt-mission alignment, subsidies) with
-  deterministic auto-detection, a Feasibility detail tab, and two new filters.
-- STAGE 2: internal curated cross-entity search — local SQLite FTS5 first, live
-  trusted-source leads (Wikipedia/Screener/IndiaCSR/YourStory/Inc42) as fallback,
-  with one-click "Add as Innovator/Company".
-Gates: build ✅ (tsc clean), 188/188 tests ✅ (was 165; +23 new), migration RAN on
-the live DB, npm run status healthy (173 companies / 16 schemes / 5 innovators).
+Full UI redesign: replace the dark top-bar layout with the glass/gradient left-sidebar
+shell from docs/design/redesign-mockup.html across Companies / Welfare Schemes /
+Innovators — with ZERO data or feature loss.
 
-## 2. Completed (exact paths)
-STAGE 1:
-- Domains 9→13 (added semiconductors, energy_security, industry_4_0,
-  smart_agriculture; clean_air→air_pollution, renewable_missions→green_hydrogen
-  via keywords): src/types/index.ts (InnovatorDomain union), src/utils/
-  innovator-match.ts (DOMAIN_SECTOR_MAP/DOMAIN_LABELS/DOMAIN_KEYWORDS),
-  src/dashboard/dashboard.ts (createInnovator Zod enum → INNOVATOR_DOMAINS),
-  src/dashboard/dashboard.html (DOMAINS array — feeds filter pills + Add-Innovator
-  dropdown).
-- New innovators columns + migration: src/db/index.ts runMigrations — added to the
-  CREATE TABLE (fresh DBs) AND idempotent PRAGMA-guarded ALTER (existing DBs; RAN
-  via `npm run db:migrate`). Columns: robustness_logistics,
-  robustness_geographic_scalability, indigenous_tech, govt_mission_alignment,
-  subsidy_land_electricity, capex_subsidy_available/_notes, opex_subsidy_available/
-  _notes. Registered JSON columns in src/db/sqlite.ts (govt_mission_alignment,
-  subsidy_land_electricity, search_meta). INNOVATOR_PATCH_COLS + InnovatorInsert
-  extended.
-- Auto-detection (NEW src/utils/feasibility.ts): detectIndigenousTech,
-  detectGovtMissionAlignment (14 canonical missions), detectSubsidies,
-  detectFeasibilitySignals. Wired into src/tools/innovator-research.ts
-  (enrichInnovator) — fill-only-if-empty, respects data.feasibility_overrides
-  locks, stores feasibility_detected_at.
-- Feasibility tab: src/dashboard/dashboard.html renderInnovatorDetail — added
-  'feasibility' tab, feasibilityHtml() (read summary + inline edit form),
-  wireFeasibility() (PUT + reload). Endpoint PUT /api/innovators/:id/feasibility
-  in dashboard.ts (feasibilitySchema, locks every touched field).
-- Filters: Indigenous Tech pills + Govt Mission multiselect in the Innovators tab
-  (F.indigenous / F.missions through readURL/writeURL/clearAll/renderFilters/
-  visibleInnovators/chips; DD_LABELS generalized for the missions dropdown).
-  flattenInnovator exposes camelCase feasibility fields + feasibilityOverrides.
+## 2. Completed (exact paths) — NOT yet committed
+- src/dashboard/dashboard.html — the whole shell:
+  * `<style>` replaced with the mockup design system (exact gradient stops, glass
+    rgba/blur(18-22px) saturate(160%), 236px sidebar, logo-chip gradient, 3px
+    stat-card accent bars, gradient score bars). Legacy CSS var aliases kept
+    (--primary/--border/--text-muted/… map to new tokens) so untouched inline JS
+    styles still resolve. ONE deliberate deviation: --ink-muted #8990a8→#6d7490
+    (contrast on glass; mockup value failed AA at 11-12px).
+  * Sidebar: DRIIV logo (/assets/logo.png) on dark chip, icon nav
+    (Overview/Companies/Welfare Schemes/Innovators/Search/Settings). Nav items
+    reuse old tab ids (tabCompanies/tabSchemes/tabInnovators) + new tabOverview;
+    navSearch→openGlobalSearch; Settings carries id=profileBtn → Match Profile
+    modal (retitled "Settings — Match Profile", contains Check-for-updates).
+  * Pinned update strip (updT1/updT2/updDot/updRestart): "Up to date · v{v} ·
+    checked on launch" → "Update found (downloading)" → "Update available —
+    Restart"; browser mode shows "Local dashboard · browser mode".
+  * Topbar global-search bar keeps id=globalSearchBtn (old listener works);
+    quick-filter search above table KEPT — the two searches are distinct.
+  * Action row under title: addBtn/addInnBtn/importInnBtn/tmplInnBtn/
+    reenrichAllHdrBtn/csvBtn (same ids, same setTab visibility logic).
+  * Insights block REMOVED; new Overview page = 8 stat cards (ids ov-*),
+    renderOverview() fed by statsData + insightsData; Ready card deep-links to
+    Companies?status=complete. loadInsights kept (20s interval).
+  * Notifications bell REMOVED (markup + all JS: snapshot/computeNotifications/
+    renderNotifications/bellBtn/notifPanel). No server API existed.
+  * Filters: pillRow deleted → ddSingle() radio dropdowns + ddGroup() for the
+    Advanced panel (Score/Match/Source/TRL in one .ddmenu.wide). ddRow
+    multi-selects unchanged. .ddmenu clicks stopPropagation so multiselects stay
+    open. Chips + Clear all unchanged.
+  * Profile Match column now matchBarHtml (purple gradient bar ≥40, grey below);
+    Score bars scoreGrad(): ≥60 green grad, ≥40 indigo grad, <40 grey.
+- electron/main.ts — sendUpdateState() on 'updates:state' channel
+  (none/available/downloaded/error + version) alongside the old text channel;
+  ipcMain.handle('updates:restart') → stopServer()+quitAndInstall.
+  Launch check CONFIRMED: setupAutoUpdater runs from app.whenReady on every
+  launch (10s delay), then 4-hourly (packaged only).
+- electron/preload.cjs — exposes onUpdateState + restartToUpdate.
+- docs/PROJECT_REQUIREMENTS.md — redesign entry added; Notifications/Insights
+  entries annotated as removed 2026-07-23.
 
-STAGE 2:
-- FTS5: src/db/index.ts — search_fts virtual table (created in runMigrations),
-  rebuildSearchIndex(), searchEntities(), toFtsQuery() (safe prefix-AND).
-- Live curated (NEW src/tools/curated-search.ts): curatedWebSearch() +
-  per-source fetchers (searchWikipedia/Screener/IndiaCsr/YourStory/Inc42),
-  dedupeLeads, normName. Promise.allSettled, fail-soft, round-robin interleave.
-- API: GET /api/search?q=[&live=true] in dashboard.ts (local always, live only
-  when live=true — frontend auto-fires live when localTotal<5).
-- UI: src/dashboard/dashboard.html — header 🔍 button (#globalSearchBtn, Ctrl+K),
-  #searchModal overlay, runGlobalSearch/renderSearchResults/searchLocalSection/
-  searchLiveSection, openSearchResult (→ detail panel), addCompanyFromLead
-  (POST /api/companies + enrich progress), addInnovatorFromLead (pre-fills
-  Add-Innovator modal).
-- Tests: NEW src/utils/__tests__/feasibility.test.ts (11),
-  src/db/__tests__/search-fts.test.ts (6, incl. "plastic waste"→Nepra),
-  src/tools/__tests__/curated-search.test.ts (6, axios mocked).
+## 3. Verification done
+- npm run build + electron:build clean; npm run test 188/188 green (twice).
+- node --check on the extracted inline script: OK.
+- LIVE Electron (npx electron . --remote-debugging-port=9222, driven via
+  puppeteer.connect CDP — script: scratchpad/drive-electron.cjs): screenshots
+  01-10 in session scratchpad. Confirmed: sidebar+logo+update strip
+  ("Up to date · v1.0.2 · checked on launch"), computed backdrop-filter
+  blur(22px) saturate(1.6) on <aside>, gradient body, all three tabs, Status
+  dropdown open, Advanced dropdown groups, Overview cards, Ctrl+K overlay w/
+  FTS results, Settings modal, bulk bar ("2 selected", all 5 actions), header
+  sort (Score ↑), detail tabs incl. Feasibility. Browser mode (headless
+  puppeteer): blur OK, strip fallback OK, bell/insights absent.
 
-## 3. Decisions
-- Robustness (logistics + geo scalability) is NOT auto-detected — too subjective
-  for keyword matching; defaults 'unknown', set manually via the tab.
-- Subsidy/indigenous detectors set true or leave null, NEVER false — a source not
-  mentioning a subsidy is not evidence of its absence. indigenous ties → null.
-- Saving the Feasibility form locks EVERY field on it (data.feasibility_overrides),
-  not just changed ones — the user reviewed the whole form, so it's asserted.
-- FTS index is rebuilt on each /api/search call (cheap at hundreds of rows) —
-  always fresh, no sync bugs. Revisit if entity count grows into 10k+.
-- Live search runs server-side only with &live=true so a keystroke never blocks on
-  the network; frontend debounces 300ms and auto-triggers live at localTotal<5.
-- curated-search does its OWN raw axios+cheerio (fetchAuto returns stripped text,
-  unusable for link extraction). Wikipedia OpenSearch + Screener API are the
-  reliable clean-name sources; IndiaCSR/YourStory/Inc42 are best-effort scrapes.
+## 4. Decisions
+- Overview page invented as the home for surviving insight numbers (avg match,
+  ready-to-contact, auto-discovered) as stat cards — spec allowed this, forbade
+  a dedicated Insights block.
+- csvBtn on Innovators tab still exports schemes CSV — PRE-EXISTING quirk,
+  deliberately not changed (no-feature-change rule). Flag to user if wanted.
+- Innovators keep Ownership filter (spec's list omitted it; no-loss rule wins).
+- st-ready/st-review stat cards on Schemes/Innovators tabs still show company
+  counts — pre-existing behavior, untouched.
 
-## 4. In progress
-Nothing half-done. Working tree has the feature edits (uncommitted — user has not
-asked to commit). Live demo server (scratchpad/serve.mjs on :3939) was stopped.
-The demo PUT that populated Chakr Innovation's feasibility was RESET back to
-defaults afterwards (made-up values, no source) — the live DB is clean.
+## 5. Next steps
+1. User visual review → commit (suggest: "Full UI redesign: glass/gradient
+   sidebar shell (mockup-exact), Overview page, dropdown filters").
+2. Release as v1.0.3 when ready (npm run release) to test the update strip's
+   downloaded→Restart flow against a real GitHub release.
+3. .claude/skills/ui-overhaul/SKILL.md is STALE (describes white/pills design,
+   wrong paths src/dashboard.html) — refresh it.
+4. Optional: purge dead CSS if any straggler classes remain (checked: .pill/
+   .notif/.iconbtn/.insights/.tabs all removed).
 
-## 5. Next steps (first prompts for next session)
-1. "Commit Stage 1 + Stage 2" if the user wants it in git (not done — awaiting ask).
-2. "Wire robustness auto-hints" — optional: infer logistics/geo scalability from
-   team_size/geography spread as a low-confidence starting guess.
-3. Pre-existing open item: "Build financial data extraction (revenue, net profit,
-   CSR budget)" — still the last open tracker item (inference.ts).
-
-## 6. Blockers (need human input)
-- Live curated search depends on outbound network; in this env Wikipedia + Screener
-  respond, the WordPress scrapes (IndiaCSR/YourStory/Inc42) often return nothing
-  (bot walls / JS shells) — fail-soft by design, but lead quality varies by source
-  reachability. No API keys added (search-free mode unchanged).
-- (Carried) Repo github.com/Shiv-Gaur/CSR-Intel still PRIVATE → auto-update feed
-  dead until the user flips visibility; GH_TOKEN needed for `npm run release`.
-- No hot reload: restart after src edits; kill the port PID first (orphaned tsx
-  children recur; the Electron shell attaches to any server already on port 3000).
+## 6. Blockers / carried over from 2026-07-22
+- IndiaCSR 403 rate-limit verification of BHEL/ITC/Infosys re-enrich spend
+  (backup at scratchpad/enrich_backup.json of THAT session) — not touched today.
+- GH_TOKEN pasted in an earlier chat should be revoked (carried warning).
+- Auto-update round-trip (1.0.1→1.0.2 installed app) still the user's manual test.

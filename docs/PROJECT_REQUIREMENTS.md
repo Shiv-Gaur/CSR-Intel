@@ -4,7 +4,7 @@
 > completed or a new one is added. Do not drop requirements — if something can't be done
 > this session, it stays open here.
 >
-> Last updated: 2026-07-21
+> Last updated: 2026-07-23
 
 ## Requirements
 
@@ -18,8 +18,10 @@
 - [x] TRL status
 - [x] Filters/search
 - [x] Bulk actions
-- [x] Notifications
-- [x] Insights card
+- [x] Notifications — REMOVED from UI 2026-07-23 (sidebar redesign; bell retired per
+      instruction, no server-side API existed; client renderer deleted, reintroduce if needed)
+- [x] Insights card — REMOVED 2026-07-23 (sidebar redesign; average match score,
+      ready-to-contact and auto-discovered counts live on as Overview stat cards)
 - [x] Innovators/startups data model + tab
 - [x] Match engine (innovator↔funder)
 - [x] Excel import for innovators
@@ -281,3 +283,37 @@
       spec "plastic waste"→Nepra case), curated-search.test.ts (6, HTTP mocked).
       Verified live: DB-hit "plastic waste" → 17 local incl. Nepra; DB-miss
       "hydrogen fuel cells" → 0 local → live Wikipedia leads.
+- [x] FULL UI REDESIGN — glass/gradient sidebar shell — DONE 2026-07-23. Visual
+      reference: docs/design/redesign-mockup.html (exact CSS reused: gradient
+      stops, glass rgba/blur values, 236px sidebar, logo-chip gradient, stat-card
+      3px accent bars, score-bar gradients). Dark top bar replaced by a left
+      sidebar: DRIIV logo on dark gradient chip, icon nav (Overview / Companies /
+      Welfare Schemes / Innovators / Search / Settings; active = tinted+accent),
+      pinned bottom update strip ("Up to date · v{version} · checked on launch" →
+      "Update available — Restart" on download; new updates:state IPC +
+      updates:restart in electron/main.ts + preload.cjs; autoUpdater confirmed to
+      check on EVERY launch, 10s after ready, then 4-hourly). Main top strip:
+      global search bar (opens the existing Ctrl+K curated overlay — distinct from
+      the per-tab quick filter, BOTH kept); page title/subtitle; compact action
+      row (Add Company / Add Innovator / Import Excel / Download Template /
+      Re-enrich All / Download CSV). Notification bell REMOVED from UI (no
+      backend existed; client code deleted). Insights block REMOVED — useful
+      numbers moved to a new Overview page of 8 glass stat cards (Ready card
+      deep-links to filtered Companies). Filters consolidated: Status pills → a
+      single Status dropdown; companies Advanced = one dropdown with
+      Score/Profile Match/Source/TRL radio groups; innovators = Domain/TRL/Stage/
+      Geography/Govt Mission/Ownership/Indigenous dropdowns; schemes =
+      Status/Sector/Geography/TRL dropdowns — active-filter chips + Clear all
+      kept. All columns kept (Score AND Profile Match separate; Profile Match now
+      a purple-gradient bar). ZERO feature loss verified in the live Electron
+      window via CDP: add/edit/delete, Excel import+template, Re-enrich All w/
+      progress+ETA, per-entity Force Re-enrich, bulk bar (select-all/re-enrich/
+      export/mark-reviewed/delete/clear), CSV export, Match Profile settings
+      (Settings nav opens it; manual "Check for updates" inside), TRL filter,
+      sortable columns, sticky detail panel w/ all tabs (incl. Feasibility),
+      Key Contacts/MoU/domain tags/feasibility fields. backdrop-filter verified
+      rendering in packaged-style Electron Chromium (computed blur(22px)
+      saturate(1.6)) AND headless browser mode. Accessibility deviation from
+      mockup: --ink-muted darkened #8990a8→#6d7490 for AA-ish contrast on glass.
+      NOTE: .claude/skills/ui-overhaul/SKILL.md still describes the pre-redesign
+      white/pills design — stale, needs a refresh.

@@ -5,229 +5,338 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CSR Funding Intelligence</title>
   <style>
+    /* ── Design system: glass panels over a layered gradient (docs/design/redesign-mockup.html) ── */
     :root {
-      --primary: #2563eb; --success: #16a34a; --warning: #d97706; --danger: #dc2626;
-      --purple: #7c3aed; --grey: #6b7280; --page: #f8f9fa; --card: #ffffff;
-      --border: #e5e7eb; --text: #111827; --text-muted: #6b7280; --track: #eef1f5;
+      --ink:#1a2035;
+      --ink-soft:#4a5170;
+      --ink-muted:#6d7490; /* mockup ships #8990a8; darkened for AA contrast on glass — legibility first */
+      --line: rgba(26,32,53,0.08);
+      --line-strong: rgba(26,32,53,0.14);
+      --accent:#3949ab;
+      --accent-soft: rgba(57,73,171,0.10);
+      --glass: rgba(255,255,255,0.62);
+      --glass-strong: rgba(255,255,255,0.78);
+      --success:#1f8a5f;
+      --success-soft:#e3f3ec;
+      --warn:#a5690f;
+      --warn-soft:#faf0dd;
+      --radius:14px;
+      /* Score-bar gradients (exact stops from the mockup) */
+      --grad-green: linear-gradient(90deg,#10b981,#34d399);
+      --grad-indigo: linear-gradient(90deg,#3949ab,#5c6bc0);
+      --grad-purple: linear-gradient(90deg,#6366f1,#a78bfa);
+      /* Legacy aliases — inline styles across the dashboard JS reference these */
+      --primary: var(--accent); --danger:#dc2626; --purple:#7c3aed; --grey:#8990a8;
+      --page: rgba(26,32,53,0.05); --card: rgba(255,255,255,0.72);
+      --border: var(--line); --text: var(--ink); --text-muted: var(--ink-muted);
+      --track: rgba(26,32,53,0.08);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: var(--page); color: var(--text); }
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.45; }
-    a { color: var(--primary); text-decoration: none; } a:hover { text-decoration: underline; }
-    button { font-family: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 8px 14px; border-radius: 8px; transition: background .12s, border-color .12s; }
-    button:hover { background: var(--page); }
-    button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-    button.primary:hover { background: #1d4ed8; }
+    html, body { height: 100%; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+      color:var(--ink); font-size:14px; line-height:1.45;
+      background:
+        radial-gradient(circle at 12% 6%, rgba(99,102,241,0.28), transparent 48%),
+        radial-gradient(circle at 90% 14%, rgba(236,72,153,0.14), transparent 46%),
+        radial-gradient(circle at 82% 96%, rgba(59,130,246,0.22), transparent 50%),
+        radial-gradient(circle at 8% 92%, rgba(129,140,248,0.16), transparent 45%),
+        linear-gradient(155deg, #eef0fc 0%, #e7ecfb 30%, #f3edf9 65%, #eef4fc 100%);
+      background-attachment: fixed;
+      display:flex; min-height:100vh;
+    }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    button { font-family: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); color: var(--ink); padding: 8px 14px; border-radius: 9px; transition: background .12s, border-color .12s; }
+    button:hover { background: var(--glass-strong); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.primary:hover { background: #303f9f; }
     button:disabled { opacity: .55; cursor: default; }
-    .wrap { max-width: 1320px; margin: 0 auto; padding: 20px; }
 
-    /* Dark header bar (user-picked Option B): the DRIIV/PSA logo has white
-       text, so it sits directly on this dark surface; all header controls are
-       restyled for contrast against it. */
-    header.topbar { background: #1e293b; border-bottom: 1px solid #0f172a; }
-    .topbar .wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; }
-    .brand { display: flex; align-items: center; gap: 16px; }
-    .brand h1 { font-size: 17px; font-weight: 650; color: #f1f5f9; }
-    .brand p { font-size: 12px; color: #94a3b8; }
-    /* logo.png is pre-cropped to its artwork (1024x300 — the original 1024x360
-       carried ~30% empty vertical margin, which made any rendered size look
-       small). No max-* caps and no overflow on any ancestor — height rules. */
-    .logochip { display: inline-flex; align-items: center; }
-    .logochip img { height: 80px; width: auto; max-width: none; max-height: none; display: block; border-radius: 6px; }
-    .topbar button { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.28); color: #e2e8f0; }
-    .topbar button:hover { background: rgba(255,255,255,.14); }
-    .topbar button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-    .topbar button.primary:hover { background: #1d4ed8; }
+    /* ── Sidebar (matches mockup aside exactly) ── */
+    aside {
+      width:236px; flex-shrink:0;
+      background:
+        linear-gradient(170deg, rgba(99,102,241,0.10), rgba(255,255,255,0) 40%),
+        var(--glass-strong);
+      backdrop-filter:blur(22px) saturate(160%);
+      -webkit-backdrop-filter:blur(22px) saturate(160%);
+      border-right:1px solid var(--line);
+      display:flex; flex-direction:column;
+      padding:18px 14px;
+      position:sticky; top:0; height:100vh;
+    }
+    .brand { display:flex; flex-direction:column; gap:10px; padding:2px 4px 16px; margin-bottom:10px; border-bottom:1px solid var(--line); }
+    .logo-chip {
+      background:linear-gradient(135deg,#1a2340,#2c3a63 55%,#1a2a4a);
+      border-radius:11px;
+      padding:10px 12px;
+      display:flex; align-items:center;
+    }
+    .logo-chip img { width:100%; height:auto; display:block; }
+    .brand-name { font-size:14.5px; font-weight:600; letter-spacing:-0.01em; padding:0 2px; }
+    nav { display:flex; flex-direction:column; gap:2px; }
+    .nav-item {
+      display:flex; align-items:center; gap:10px;
+      padding:9px 10px; border-radius:10px;
+      color:var(--ink-soft); text-decoration:none; font-size:13.5px; font-weight:500;
+      cursor:pointer;
+    }
+    .nav-item svg { flex-shrink:0; opacity:0.75; }
+    .nav-item.active { background:var(--accent-soft); color:var(--accent); }
+    .nav-item.active svg { opacity:1; }
+    .nav-item:hover:not(.active) { background:rgba(26,32,53,0.04); }
+    .nav-spacer { flex:1; }
+    .update-strip {
+      margin-top:8px; padding:10px 12px; border-radius:12px;
+      background:rgba(255,255,255,0.55); border:1px solid var(--line);
+      display:flex; align-items:center; gap:9px;
+    }
+    .update-strip .dot { width:7px; height:7px; border-radius:50%; background:var(--success); flex-shrink:0; }
+    .update-strip .dot.warn { background:#d97706; }
+    .update-strip .txt { display:flex; flex-direction:column; gap:1px; min-width:0; }
+    .update-strip .t1 { font-size:12px; font-weight:600; color:var(--ink); }
+    .update-strip .t2 { font-size:11px; color:var(--ink-muted); }
+    .update-strip button { margin-left:auto; padding:4px 9px; font-size:11.5px; border-radius:7px; flex-shrink:0; }
 
-    /* Tabs */
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-    .tab { padding: 10px 18px; border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--text-muted); font-weight: 600; }
-    .tab:hover { background: none; color: var(--text); }
-    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    /* ── Main column ── */
+    .content { flex:1; padding:22px 30px 40px; min-width:0; }
+    .wrap { max-width:1380px; margin:0 auto; }
+    .topbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .search {
+      flex:1; max-width:420px;
+      display:flex; align-items:center; gap:8px;
+      background:var(--glass);
+      backdrop-filter:blur(14px) saturate(160%);
+      -webkit-backdrop-filter:blur(14px) saturate(160%);
+      border:1px solid var(--line);
+      border-radius:11px;
+      padding:9px 13px;
+      color:var(--ink-muted);
+      font-size:13px;
+      cursor:pointer;
+    }
+    .search input { border:none; outline:none; width:100%; font-size:13px; background:transparent; color:var(--ink); cursor:text; }
+    .search kbd { margin-left:auto; font-size:11px; padding:2px 6px; border:1px solid var(--line-strong); border-radius:5px; color:var(--ink-muted); background:rgba(255,255,255,0.6); }
+    h1 { font-size:19px; font-weight:600; margin:0 0 3px; letter-spacing:-0.01em; }
+    .sub { font-size:12.5px; color:var(--ink-muted); margin:0 0 16px; }
+    .actionrow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:18px; }
+    .actionrow button { font-size:12.5px; padding:7px 12px; }
 
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
-    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-    .stat .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
-    .stat .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
-    .stat .value.blue { color: var(--primary); } .stat .value.green { color: var(--success); }
-    .stat .value.amber { color: var(--warning); } .stat .value.grey { color: var(--grey); }
+    /* ── Stat cards: glass + 3px gradient top accent ── */
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+    .stat {
+      position:relative;
+      background:var(--glass);
+      backdrop-filter:blur(18px) saturate(160%);
+      -webkit-backdrop-filter:blur(18px) saturate(160%);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      padding:14px 16px;
+      box-shadow:0 8px 24px rgba(26,32,53,0.05);
+      overflow:hidden;
+    }
+    .stat::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,#6366f1,#a78bfa,#ec4899); }
+    .stat.success::before { background:linear-gradient(90deg,#10b981,#34d399); }
+    .stat.warn::before { background:linear-gradient(90deg,#d97706,#f59e0b); }
+    .stat .label { font-size:11.5px; color:var(--ink-muted); margin:0 0 6px; font-weight:500; }
+    .stat .value { font-size:23px; font-weight:600; margin:0; font-variant-numeric:tabular-nums; letter-spacing:-0.01em; }
+    .stat .value.blue { color:var(--accent); } .stat .value.green { color:var(--success); }
+    .stat .value.amber { color:var(--warn); } .stat .value.grey { color:var(--ink-soft); }
 
-    /* Insights */
-    .insights { background: linear-gradient(180deg,#f0f7ff, #f8fbff); border: 1px solid #cfe1fb; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; }
-    .insights .ititle { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--primary); font-weight: 700; margin-bottom: 10px; }
-    .insights .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 22px; }
-    .insights .item { font-size: 13px; } .insights .item b { font-weight: 700; }
-    .insights .item .lead { color: var(--text-muted); }
-    @media (max-width: 800px){ .insights .grid { grid-template-columns: 1fr; } }
+    .controls { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:12px; }
+    .controls .search { min-width:240px; cursor:default; }
 
-    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
-    .search { flex: 1; min-width: 240px; display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px; }
-    .search input { border: none; outline: none; width: 100%; font-size: 14px; background: transparent; color: var(--text); }
+    /* ── Filters: glass dropdown chips ── */
+    .filterbar { margin-bottom:16px; }
+    .filterrow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .fgrouplabel { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); font-weight:700; margin-right:4px; }
+    .dd { position:relative; }
+    .dd > button {
+      display:flex; align-items:center; gap:6px;
+      padding:7px 12px;
+      background:var(--glass);
+      backdrop-filter:blur(14px) saturate(160%);
+      -webkit-backdrop-filter:blur(14px) saturate(160%);
+      border:1px solid var(--line);
+      border-radius:9px;
+      font-size:12.5px; font-weight:500;
+      color:var(--ink-soft);
+    }
+    .dd.on > button, .dd.has > button { background:var(--accent-soft); color:var(--accent); border-color:rgba(57,73,171,0.25); }
+    .ddmenu {
+      display:none; position:absolute; z-index:40; top:110%; left:0;
+      background:var(--glass-strong);
+      backdrop-filter:blur(20px) saturate(160%);
+      -webkit-backdrop-filter:blur(20px) saturate(160%);
+      border:1px solid var(--line); border-radius:12px;
+      box-shadow:0 12px 36px rgba(26,32,53,0.14);
+      padding:8px; width:250px; max-height:300px; overflow:auto;
+    }
+    .ddmenu.wide { width:320px; max-height:380px; }
+    .dd.open .ddmenu { display:block; }
+    .ddmenu label { display:flex; align-items:center; gap:8px; font-size:13px; padding:5px 7px; border-radius:7px; cursor:pointer; color:var(--ink); }
+    .ddmenu label:hover { background:rgba(26,32,53,0.05); }
+    .ddmenu input { accent-color:var(--accent); }
+    .ddsec { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); font-weight:700; padding:8px 7px 3px; }
+    .ddsec:first-child { padding-top:2px; }
+    .chips-active { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; align-items:center; }
+    .achip { display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft); color:var(--accent); border-radius:999px; padding:4px 10px; font-size:12px; }
+    .achip b { cursor:pointer; font-weight:800; }
+    .clearall { font-size:12px; color:var(--danger); background:none; border:none; backdrop-filter:none; -webkit-backdrop-filter:none; }
 
-    /* Filter bar */
-    .filterbar { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
-    .filterrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .fgrouplabel { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 700; margin-right: 4px; }
-    .pills { display: flex; flex-wrap: wrap; gap: 6px; }
-    .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--text-muted); font-size: 12.5px; cursor: pointer; }
-    .pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-    .dd { position: relative; }
-    .dd > button { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; }
-    .dd.has > button { border-color: var(--primary); color: var(--primary); }
-    .ddmenu { display: none; position: absolute; z-index: 40; top: 110%; left: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 36px rgba(0,0,0,.14); padding: 8px; width: 250px; max-height: 280px; overflow: auto; }
-    .dd.open .ddmenu { display: block; }
-    .ddmenu label { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
-    .ddmenu label:hover { background: var(--page); }
-    .advtoggle { font-size: 12.5px; color: var(--primary); background: none; border: none; padding: 6px 8px; }
-    .advanced { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
-    .advanced.show { display: block; }
-    .chips-active { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
-    .achip { display: inline-flex; align-items: center; gap: 6px; background: rgba(37,99,235,.10); color: var(--primary); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
-    .achip b { cursor: pointer; font-weight: 800; }
-    .clearall { font-size: 12px; color: var(--danger); background: none; border: none; }
+    /* ── Table + detail panels: frosted glass ── */
+    .main { display:grid; grid-template-columns:60% 40%; gap:16px; align-items:start; }
+    .panel {
+      background:var(--glass);
+      backdrop-filter:blur(20px) saturate(160%);
+      -webkit-backdrop-filter:blur(20px) saturate(160%);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:0 10px 32px rgba(26,32,53,0.06);
+      overflow:hidden;
+    }
+    .panel.side { position:sticky; top:16px; max-height:calc(100vh - 32px); overflow-y:auto; }
+    .panel .phead { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+    .panel .phead h2 { font-size:14px; font-weight:600; }
+    .panel .phead .count { font-size:12px; color:var(--ink-muted); }
 
-    .main { display: grid; grid-template-columns: 60% 40%; gap: 16px; align-items: start; }
-    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    /* Detail panel follows the scroll beside the table; its own content scrolls
-       inside when taller than the viewport. Requires .main{align-items:start}. */
-    .panel.side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
-    .panel .phead { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .panel .phead h2 { font-size: 14px; font-weight: 650; }
-    .panel .phead .count { font-size: 12px; color: var(--text-muted); }
+    table { width:100%; border-collapse:collapse; }
+    thead th { text-align:left; font-size:11px; font-weight:600; color:var(--ink-muted); padding:9px 12px; border-bottom:1px solid var(--line); letter-spacing:0.01em; }
+    thead th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+    thead th.sortable:hover { color:var(--ink); }
+    thead th.sorted { color:var(--accent); }
+    tbody td { padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    tbody tr { cursor:pointer; } tbody tr:hover { background:rgba(26,32,53,0.03); } tbody tr.selected { background:var(--accent-soft); }
+    .cname { font-weight:600; font-size:13.5px; } .csub { font-size:12px; color:var(--ink-muted); }
+    .chk { width:30px; text-align:center; } .chk input { accent-color:var(--accent); cursor:pointer; }
 
-    table { width: 100%; border-collapse: collapse; }
-    thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); padding: 10px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
-    thead th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
-    thead th.sortable:hover { color: var(--text); }
-    thead th.sorted { color: var(--primary); }
-    tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    tbody tr { cursor: pointer; } tbody tr:hover { background: var(--page); } tbody tr.selected { background: #eff4ff; }
-    .cname { font-weight: 600; } .csub { font-size: 12px; color: var(--text-muted); }
-    .chk { width: 30px; text-align: center; } .chk input { accent-color: var(--primary); cursor: pointer; }
+    .badge { display:inline-block; padding:3px 9px; border-radius:7px; font-size:11.5px; font-weight:600; }
+    .badge.green { color:var(--success); background:var(--success-soft); }
+    .badge.blue  { color:var(--accent); background:var(--accent-soft); }
+    .badge.amber { color:var(--warn); background:var(--warn-soft); }
+    .badge.grey  { color:var(--ink-soft); background:rgba(26,32,53,0.07); }
+    .trl { display:inline-block; font-size:11px; font-weight:700; border-radius:6px; padding:2px 7px; }
+    .trl.research { color:var(--warn); background:var(--warn-soft); }
+    .trl.development { color:var(--accent); background:var(--accent-soft); }
+    .trl.deployment { color:var(--success); background:var(--success-soft); }
+    .trl.unknown { color:var(--ink-soft); background:rgba(26,32,53,0.07); }
 
-    .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-    .badge.green { color: var(--success); background: rgba(22,163,74,.10); }
-    .badge.blue  { color: var(--primary); background: rgba(37,99,235,.10); }
-    .badge.amber { color: var(--warning); background: rgba(217,119,6,.12); }
-    .badge.grey  { color: var(--grey);    background: rgba(107,114,128,.12); }
-    .trl { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 7px; }
-    .trl.research { color: #b45309; background: rgba(217,119,6,.12); }
-    .trl.development { color: var(--primary); background: rgba(37,99,235,.12); }
-    .trl.deployment { color: var(--success); background: rgba(22,163,74,.12); }
-    .trl.unknown { color: var(--grey); background: rgba(107,114,128,.12); }
+    .score { min-width:110px; } .bar { height:5px; border-radius:999px; background:var(--track); overflow:hidden; }
+    .bar > span { display:block; height:100%; border-radius:999px; } .score .lbl { font-size:11px; color:var(--ink-muted); margin-top:4px; font-variant-numeric:tabular-nums; }
 
-    .score { min-width: 110px; } .bar { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
-    .bar > span { display: block; height: 100%; border-radius: 999px; } .score .lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    /* Bulk bar — dark contextual strip, frosted */
+    .bulkbar { display:none; align-items:center; gap:10px; background:rgba(26,32,53,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:#fff; border-radius:12px; padding:10px 14px; margin-bottom:12px; }
+    .bulkbar.show { display:flex; }
+    .bulkbar .bn { font-weight:700; } .bulkbar .sp { flex:1; }
+    .bulkbar button { background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.2); color:#fff; backdrop-filter:none; -webkit-backdrop-filter:none; }
+    .bulkbar button:hover { background:rgba(255,255,255,.2); }
+    .bulkbar button.danger { background:rgba(220,38,38,.85); border-color:transparent; }
 
-    /* Bulk bar */
-    .bulkbar { display: none; align-items: center; gap: 10px; background: #111827; color: #fff; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
-    .bulkbar.show { display: flex; }
-    .bulkbar .bn { font-weight: 700; } .bulkbar .sp { flex: 1; }
-    .bulkbar button { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.2); color: #fff; }
-    .bulkbar button:hover { background: rgba(255,255,255,.2); }
-    .bulkbar button.danger { background: rgba(220,38,38,.85); border-color: transparent; }
+    .detail { padding:18px; } .detail .empty { color:var(--ink-muted); text-align:center; padding:40px 10px; }
+    .detail h3 { font-size:18px; font-weight:700; margin-bottom:4px; }
+    .detail .meta { color:var(--ink-muted); font-size:13px; margin-bottom:14px; }
+    .dtabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; flex-wrap:wrap; }
+    .dtab { padding:8px 12px; border:none; background:none; backdrop-filter:none; -webkit-backdrop-filter:none; border-bottom:2px solid transparent; border-radius:0; font-size:13px; color:var(--ink-muted); font-weight:600; }
+    .dtab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .scoreblock { background:rgba(26,32,53,0.04); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:16px; }
+    .scoreblock .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+    .scoreblock .num { font-size:22px; font-weight:700; } .scoreblock .verdict { font-size:13px; font-weight:600; }
+    .field { margin-bottom:12px; } .field .k { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); margin-bottom:3px; } .field .v { font-size:13px; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; } .chip { background:rgba(255,255,255,0.5); border:1px solid var(--line-strong); border-radius:6px; padding:3px 8px; font-size:12px; }
+    .srcbadge { font-size:10px; font-weight:700; border-radius:5px; padding:1px 5px; margin-left:6px; }
+    .srcbadge.extracted { color:var(--success); background:var(--success-soft); }
+    .srcbadge.inferred { color:var(--warn); background:var(--warn-soft); }
+    .srcbadge.estimated { color:var(--purple); background:rgba(124,58,237,.12); }
+    .actions { display:flex; gap:10px; margin-top:8px; }
+    .matchblock { background:var(--accent-soft); border:1px solid rgba(57,73,171,0.20); border-radius:10px; padding:14px; margin-bottom:16px; }
+    .matchblock .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+    .matchblock .num { font-size:22px; font-weight:700; color:var(--accent); }
+    .matchblock .why { margin-top:10px; } .matchblock .why .k { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); margin-bottom:4px; }
+    .matchblock .why ul { margin:0; padding-left:16px; } .matchblock .why li { font-size:12.5px; margin-bottom:2px; } .matchblock .none { font-size:12.5px; color:var(--ink-muted); }
 
-    .detail { padding: 18px; } .detail .empty { color: var(--text-muted); text-align: center; padding: 40px 10px; }
-    .detail h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
-    .detail .meta { color: var(--text-muted); font-size: 13px; margin-bottom: 14px; }
-    .dtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
-    .dtab { padding: 8px 12px; border: none; background: none; border-bottom: 2px solid transparent; border-radius: 0; font-size: 13px; color: var(--text-muted); font-weight: 600; }
-    .dtab.active { color: var(--primary); border-bottom-color: var(--primary); }
-    .scoreblock { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-    .scoreblock .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-    .scoreblock .num { font-size: 22px; font-weight: 700; } .scoreblock .verdict { font-size: 13px; font-weight: 600; }
-    .field { margin-bottom: 12px; } .field .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 3px; } .field .v { font-size: 13px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; } .chip { background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
-    .srcbadge { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 1px 5px; margin-left: 6px; }
-    .srcbadge.extracted { color: var(--success); background: rgba(22,163,74,.12); }
-    .srcbadge.inferred { color: var(--warning); background: rgba(217,119,6,.12); }
-    .srcbadge.estimated { color: var(--purple); background: rgba(124,58,237,.12); }
-    .actions { display: flex; gap: 10px; margin-top: 8px; }
-    .matchblock { background: #f0f7ff; border: 1px solid #cfe1fb; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
-    .matchblock .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-    .matchblock .num { font-size: 22px; font-weight: 700; color: var(--primary); }
-    .matchblock .why { margin-top: 10px; } .matchblock .why .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 4px; }
-    .matchblock .why ul { margin: 0; padding-left: 16px; } .matchblock .why li { font-size: 12.5px; margin-bottom: 2px; } .matchblock .none { font-size: 12.5px; color: var(--text-muted); }
+    footer { text-align:center; color:var(--ink-muted); font-size:12px; padding:24px 0 8px; }
+    #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 18px; border-radius:9px; font-size:13px; opacity:0; pointer-events:none; transition:opacity .2s; z-index:80; }
+    #toast.show { opacity:1; }
 
-    footer { text-align: center; color: var(--text-muted); font-size: 12px; padding: 24px 0 8px; }
-    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 11px 18px; border-radius: 9px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 80; }
-    #toast.show { opacity: 1; }
-    .iconbtn { width: 38px; height: 38px; padding: 0; display: grid; place-items: center; font-size: 17px; position: relative; }
-    .dot { position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; display: none; align-items: center; justify-content: center; }
-    .dot.show { display: flex; }
+    .modal-bg { position:fixed; inset:0; background:rgba(26,32,53,.35); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:none; align-items:flex-start; justify-content:center; z-index:60; padding:40px 16px; overflow-y:auto; }
+    .modal-bg.show { display:flex; }
+    .modal { background:var(--glass-strong); backdrop-filter:blur(22px) saturate(160%); -webkit-backdrop-filter:blur(22px) saturate(160%); border-radius:var(--radius); width:100%; max-width:640px; border:1px solid var(--line); box-shadow:0 20px 60px rgba(26,32,53,.18); }
+    .modal .mhead { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+    .modal .mhead h2 { font-size:16px; font-weight:650; }
+    .modal .mbody { padding:20px; max-height:65vh; overflow-y:auto; }
+    .modal .mfoot { padding:14px 20px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px; }
+    .modal .close { border:none; background:none; backdrop-filter:none; -webkit-backdrop-filter:none; font-size:20px; color:var(--ink-muted); padding:4px 8px; }
+    .fgroup { margin-bottom:20px; }
+    .fgroup > label.h { display:block; font-size:12px; font-weight:650; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-muted); margin-bottom:8px; }
+    .checkgrid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px 14px; } .checkgrid.geo { grid-template-columns:repeat(3,1fr); }
+    .checkgrid label { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; } .checkgrid input { accent-color:var(--accent); }
+    .taginput { display:flex; flex-wrap:wrap; gap:6px; border:1px solid var(--line-strong); border-radius:9px; padding:7px 8px; background:rgba(255,255,255,0.5); }
+    .taginput input { border:none; outline:none; flex:1; min-width:120px; font-size:13px; background:transparent; color:var(--ink); }
+    .tag { display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:3px 8px; font-size:12px; } .tag b { cursor:pointer; font-weight:700; }
+    .hint { font-size:12px; color:var(--ink-muted); margin-top:6px; }
+    .mbadge { display:inline-block; font-size:10px; font-weight:700; color:var(--accent); background:var(--accent-soft); border-radius:5px; padding:1px 5px; margin-left:6px; vertical-align:middle; }
+    .mbadge.auto { color:var(--purple); background:rgba(124,58,237,.12); }
+    td.delcell { width:44px; text-align:right; padding-left:8px; }
+    /* Icon-only row delete: inline SVG, hidden until row hover (see original rationale) */
+    .rowdel { opacity:0; pointer-events:none; border:none; background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none; color:var(--ink-muted); padding:4px; margin:0; line-height:0; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; position:relative; z-index:1; transition:opacity .12s, color .12s, background .12s; }
+    .rowdel svg { width:15px; height:15px; display:block; }
+    tbody tr:hover .rowdel { opacity:1; pointer-events:auto; }
+    .rowdel:hover { color:var(--danger); background:rgba(220,38,38,.08); }
+    .tip { border-bottom:1px dotted var(--ink-muted); cursor:help; }
 
-    .modal-bg { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: none; align-items: flex-start; justify-content: center; z-index: 60; padding: 40px 16px; overflow-y: auto; }
-    .modal-bg.show { display: flex; }
-    .modal { background: var(--card); border-radius: 14px; width: 100%; max-width: 640px; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,.18); }
-    .modal .mhead { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .modal .mhead h2 { font-size: 16px; font-weight: 650; }
-    .modal .mbody { padding: 20px; max-height: 65vh; overflow-y: auto; }
-    .modal .mfoot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
-    .modal .close { border: none; background: none; font-size: 20px; color: var(--text-muted); padding: 4px 8px; }
-    .fgroup { margin-bottom: 20px; }
-    .fgroup > label.h { display: block; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 8px; }
-    .checkgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; } .checkgrid.geo { grid-template-columns: repeat(3, 1fr); }
-    .checkgrid label { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; } .checkgrid input { accent-color: var(--primary); }
-    .taginput { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--border); border-radius: 9px; padding: 7px 8px; }
-    .taginput input { border: none; outline: none; flex: 1; min-width: 120px; font-size: 13px; background: transparent; }
-    .tag { display: inline-flex; align-items: center; gap: 6px; background: rgba(37,99,235,.10); color: var(--primary); border-radius: 6px; padding: 3px 8px; font-size: 12px; } .tag b { cursor: pointer; font-weight: 700; }
-    .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-    .mbadge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--primary); background: rgba(37,99,235,.12); border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
-    .mbadge.auto { color: var(--purple); background: rgba(124,58,237,.12); }
-    td.delcell { width: 44px; text-align: right; padding-left: 8px; }
-    /* Icon-only button: inline SVG (no emoji), aria-label instead of title —
-       a title attribute makes the browser draw its native dark tooltip box,
-       which floated over the TRL column. Hidden until the row is hovered;
-       lives in its own fixed-width cell so it can never overlap adjacent text. */
-    .rowdel { opacity: 0; pointer-events: none; border: none; background: transparent; color: var(--text-muted, var(--grey)); padding: 4px; margin: 0; line-height: 0; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; position: relative; z-index: 1; transition: opacity .12s, color .12s, background .12s; }
-    .rowdel svg { width: 15px; height: 15px; display: block; }
-    tbody tr:hover .rowdel { opacity: 1; pointer-events: auto; }
-    .rowdel:hover { color: var(--danger); background: rgba(220,38,38,.08); }
-    /* Notifications panel */
-    .notif { position: fixed; top: 60px; right: 16px; width: 320px; max-width: calc(100vw - 32px); background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.2); z-index: 1000; display: none; }
-    .notif.show { display: block; }
-    .notif .nh { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-    .notif .nh h3 { font-size: 14px; } .notif .nlist { max-height: 380px; overflow: auto; }
-    .nitem { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
-    .nitem:hover { background: var(--page); } .nitem .ic { font-size: 16px; } .nitem .tx { font-size: 13px; } .nitem .tx .sub { color: var(--text-muted); font-size: 11.5px; }
-    .nempty { padding: 22px 14px; text-align: center; color: var(--text-muted); font-size: 13px; }
-    .tip { border-bottom: 1px dotted var(--text-muted); cursor: help; }
-
-    @media (max-width: 900px) { .main { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } .panel.side { position: static; max-height: none; } }
+    @media (max-width: 1100px) { .main { grid-template-columns:1fr; } .stats { grid-template-columns:repeat(2,1fr); } .panel.side { position:static; max-height:none; } }
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="wrap">
-      <div class="brand">
-        <span class="logochip"><img src="/assets/logo.png" alt="DRIIV — Office of the Principal Scientific Adviser to the Government of India"></span>
-        <div><h1>CSR Funding Intelligence</h1><p>Deterministic discovery, enrichment &amp; verification</p></div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="iconbtn" id="globalSearchBtn" title="Search everything (Ctrl+K)" aria-label="Search everything">🔍</button>
-        <button id="addBtn">＋ Add Company</button>
-        <button id="addInnBtn" style="display:none">＋ Add Innovator</button>
-        <button id="importInnBtn" style="display:none" title="Bulk import innovators from .xlsx or .csv">⬆ Import from Excel</button>
-        <button id="tmplInnBtn" style="display:none" title="Blank Excel template with the expected columns">⬇ Download Template</button>
-        <input type="file" id="importInnFile" accept=".xlsx,.csv" style="display:none">
-        <button id="reenrichAllHdrBtn" title="Queue a fresh enrichment for every row in this tab">↻ Re-enrich All</button>
-        <button class="iconbtn" id="bellBtn" title="Notifications">🔔<span class="dot" id="bellDot">0</span></button>
-        <button class="iconbtn" id="profileBtn" title="Our Profile">⚙</button>
-        <button class="primary" id="csvBtn">⬇ Download CSV</button>
-      </div>
+  <!-- Sidebar (structure + CSS from docs/design/redesign-mockup.html) -->
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="logo-chip"><img src="/assets/logo.png" alt="Office of the Principal Scientific Adviser to the Government of India — DRIIV"></div>
+      <div class="brand-name">CSR Funding Intelligence</div>
     </div>
-  </header>
+    <nav>
+      <div class="nav-item" id="tabOverview">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Overview
+      </div>
+      <div class="nav-item active" id="tabCompanies">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/></svg>
+        Companies
+      </div>
+      <div class="nav-item" id="tabSchemes">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7"/><rect x="2" y="7" width="20" height="5" rx="1"/><path d="M12 7v13M12 7c-1.5-3-6-3-6 0s4.5 3 6 0zM12 7c1.5-3 6-3 6 0s-4.5 3-6 0z"/></svg>
+        Welfare Schemes
+      </div>
+      <div class="nav-item" id="tabInnovators">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.5 1 1.3 1 2.1V16h6v-.4c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+        Innovators
+      </div>
+      <div class="nav-item" id="navSearch">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Search
+      </div>
+      <div class="nav-item" id="profileBtn">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9c.2.7.7 1.2 1.5 1.4H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        Settings
+      </div>
+    </nav>
+    <div class="nav-spacer"></div>
+    <div class="update-strip" id="updateStrip">
+      <div class="dot" id="updDot"></div>
+      <div class="txt">
+        <div class="t1" id="updT1">Up to date</div>
+        <div class="t2" id="updT2">local dashboard</div>
+      </div>
+      <button id="updRestart" style="display:none" title="Restart to apply the downloaded update">Restart</button>
+    </div>
+  </aside>
 
-  <!-- Notifications panel -->
-  <div class="notif" id="notifPanel">
-    <div class="nh"><h3>Notifications</h3><button id="notifReadAll" style="font-size:12px">Mark all read</button></div>
-    <div class="nlist" id="notifList"></div>
-  </div>
+  <div class="content">
 
   <!-- Our Profile modal -->
   <div class="modal-bg" id="profileModal">
     <div class="modal">
-      <div class="mhead"><h2>⚙ Our Profile</h2><button class="close" id="profileClose">×</button></div>
+      <div class="mhead"><h2>Settings — Match Profile</h2><button class="close" id="profileClose">×</button></div>
       <div class="mbody">
         <div class="fgroup"><label class="h">Technologies we offer</label>
           <div class="taginput" id="techInput"><input type="text" placeholder="Type and press Enter… e.g. IoT, AI/ML, Drone"></div>
@@ -359,25 +468,47 @@
   </div>
 
   <div class="wrap">
-    <div class="tabs">
-      <button class="tab active" id="tabCompanies" data-tab="companies">Companies</button>
-      <button class="tab" id="tabSchemes" data-tab="schemes">Welfare Schemes</button>
-      <button class="tab" id="tabInnovators" data-tab="innovators">Innovators</button>
+    <div class="topbar">
+      <div class="search" id="globalSearchBtn" role="button" tabindex="0" aria-label="Search everything (Ctrl+K)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Search companies, schemes, innovators
+        <kbd>Ctrl K</kbd>
+      </div>
     </div>
+
+    <h1 id="pageTitle">Companies</h1>
+    <p class="sub" id="pageSub">Deterministic discovery, enrichment and verification</p>
+
+    <div class="actionrow" id="actionrow">
+      <button id="addBtn">＋ Add Company</button>
+      <button id="addInnBtn" style="display:none">＋ Add Innovator</button>
+      <button id="importInnBtn" style="display:none" title="Bulk import innovators from .xlsx or .csv">⬆ Import from Excel</button>
+      <button id="tmplInnBtn" style="display:none" title="Blank Excel template with the expected columns">⬇ Download Template</button>
+      <input type="file" id="importInnFile" accept=".xlsx,.csv" style="display:none">
+      <button id="reenrichAllHdrBtn" title="Queue a fresh enrichment for every row in this tab">↻ Re-enrich All</button>
+      <button class="primary" id="csvBtn">⬇ Download CSV</button>
+    </div>
+
+    <!-- Overview page: cross-entity stat cards (replaces the old Insights block) -->
+    <section class="stats" id="overviewArea" style="display:none">
+      <div class="stat"><div class="label">Total Companies</div><div class="value blue" id="ov-companies">—</div></div>
+      <div class="stat success" id="ov-readyCard" style="cursor:pointer" title="View ready-to-contact companies"><div class="label">Ready to Contact</div><div class="value green" id="ov-ready">—</div></div>
+      <div class="stat warn"><div class="label">Needs Review</div><div class="value amber" id="ov-review">—</div></div>
+      <div class="stat"><div class="label">Verified</div><div class="value grey" id="ov-verified">—</div></div>
+      <div class="stat"><div class="label">Innovators</div><div class="value blue" id="ov-innovators">—</div></div>
+      <div class="stat"><div class="label">Welfare Schemes</div><div class="value blue" id="ov-schemes">—</div></div>
+      <div class="stat"><div class="label">Average Match Score</div><div class="value grey" id="ov-match">—</div></div>
+      <div class="stat"><div class="label">Auto-discovered This Week</div><div class="value grey" id="ov-auto">—</div></div>
+    </section>
 
     <section class="stats" id="stats">
       <div class="stat"><div class="label" id="st-total-l">Total Companies</div><div class="value blue" id="st-total">—</div></div>
-      <div class="stat"><div class="label">Ready</div><div class="value green" id="st-ready">—</div></div>
-      <div class="stat"><div class="label">Needs Review</div><div class="value amber" id="st-review">—</div></div>
+      <div class="stat success"><div class="label">Ready</div><div class="value green" id="st-ready">—</div></div>
+      <div class="stat warn"><div class="label">Needs Review</div><div class="value amber" id="st-review">—</div></div>
       <div class="stat"><div class="label">Verified</div><div class="value grey" id="st-verified">—</div></div>
     </section>
 
-    <section class="insights" id="insights">
-      <div class="ititle">✦ Insights</div>
-      <div class="grid" id="insightsGrid"></div>
-    </section>
-
-    <section class="controls">
+    <section class="controls" id="controls">
       <div class="search"><span aria-hidden="true">🔍</span><input id="search" type="text" placeholder="Search by name or sector…" autocomplete="off"></div>
     </section>
 
@@ -393,7 +524,7 @@
       <button id="bulkClear">Clear</button>
     </div>
 
-    <section class="main">
+    <section class="main" id="mainArea">
       <div class="panel">
         <div class="phead"><h2 id="listTitle">Companies</h2><span class="count" id="tableCount"></span></div>
         <div id="freshBanner" style="display:none"></div>
@@ -410,6 +541,7 @@
 
     <footer>CSR Funding Intelligence · Local, LLM-free pipeline · Search-free mode (direct sources only)</footer>
   </div>
+  </div><!-- /content -->
 
   <div id="toast"></div>
 
@@ -428,14 +560,18 @@
     function stageLabel(s){ for(var i=0;i<STAGES.length;i++)if(STAGES[i][0]===s)return STAGES[i][1]; return s||'—'; }
     function trlNumBand(n){ if(n==null)return 'unknown'; return n<=3?'research':n<=6?'development':'deployment'; }
     function trlNumBadge(n){ if(n==null)return '<span class="trl unknown">TRL: n/a</span>'; return '<span class="trl '+trlNumBand(n)+'">TRL '+n+'</span>'; }
-    function susBar(score){ var col=score>=70?'var(--success)':score>=40?'var(--primary)':'var(--grey)'; return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+col+'"></span></div><div class="lbl">'+score+' / 100</div></div>'; }
+    // Gradient fills per the mockup: green = strong, indigo = mid, muted grey = low/no data.
+    function scoreGrad(s){ return s>=60?'var(--grad-green)':s>=40?'var(--grad-indigo)':'var(--grey)'; }
+    function susBar(score){ return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+scoreGrad(score)+'"></span></div><div class="lbl">'+score+' / 100</div></div>'; }
     function statusInfo(s){ return STATUS[String(s||'').toLowerCase()] || {label:s||'Unknown',cls:'grey'}; }
 
     function scoreCompany(c){ var sec=(c.sectorFocus||[]).length, geo=(c.geographyFocus||[]).length, spend=Number(c.csrSpendActualCr)>0, hasDoc=(c.sourceUrls||[]).length>0, hasContact=!!c.contactEmail; var s=0; s+=Math.min(sec,10)*2; s+=Math.min(geo,10)*2; if(spend)s+=25; if(hasDoc)s+=20; if(hasContact)s+=15; return Math.max(0,Math.min(100,Math.round(s))); }
     function displayScore(c){ return (typeof c.manualScore==='number')?c.manualScore:scoreCompany(c); }
     // Neutral framing: low scores are a DATA GAP, not a failure — grey, never red/orange.
     function scoreVerdict(s){ if(s>=80)return{text:'Strong match',color:'var(--success)'}; if(s>=60)return{text:'Good match',color:'var(--primary)'}; if(s>=40)return{text:'Fair match',color:'var(--grey)'}; return{text:'Limited data',color:'var(--grey)'}; }
-    function barHtml(score){ var v=scoreVerdict(score); return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+v.color+'"></span></div><div class="lbl">'+score+' / 100 · '+v.text+'</div></div>'; }
+    function barHtml(score){ var v=scoreVerdict(score); return '<div class="score"><div class="bar"><span style="width:'+score+'%;background:'+scoreGrad(score)+'"></span></div><div class="lbl">'+score+' / 100 · '+v.text+'</div></div>'; }
+    // Profile-match bar: indigo/purple gradient (grey when below the 40 threshold).
+    function matchBarHtml(pm){ return '<div class="score"><div class="bar"><span style="width:'+pm+'%;background:'+(pm>=40?'var(--grad-purple)':'var(--grey)')+'"></span></div><div class="lbl">'+pm+' / 100</div></div>'; }
     function trlBadge(trl){ if(!trl||!trl.band||trl.band==='unknown')return '<span class="trl unknown">TRL: n/a</span>'; return '<span class="trl '+trl.band+'">'+esc(trl.label)+'</span>'; }
     function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
     function showToast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show');},2600); }
@@ -449,7 +585,7 @@
     // ─── URL persistence ─────────────────────────────────────────────────────
     function readURL(){
       var p=new URLSearchParams(location.search);
-      activeTab = p.get('tab')==='schemes'?'schemes':p.get('tab')==='innovators'?'innovators':'companies';
+      activeTab = p.get('tab')==='schemes'?'schemes':p.get('tab')==='innovators'?'innovators':p.get('tab')==='overview'?'overview':'companies';
       F.q=p.get('q')||''; F.status=p.get('status')||'all'; F.score=p.get('score')||'all';
       F.match=p.get('match')||'all'; F.source=p.get('source')||'all'; F.trl=p.get('trl')||'all';
       F.domain=p.get('domain')||'all'; F.stage=p.get('stage')||'all'; F.own=p.get('own')||'all';
@@ -490,10 +626,17 @@
     var INN_TRL_PILLS=[['all','All'],['research','TRL 1-3'],['development','TRL 4-6'],['deployment','TRL 7-9']];
     var INDIGENOUS_PILLS=[['all','All'],['yes','Indigenous'],['no','Foreign/Licensed'],['unknown','Unknown']];
 
-    function pillRow(label,key,pills){
-      return '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">'+label+'</span><div class="pills">'+
-        pills.map(function(p){return '<span class="pill'+(F[key]===p[0]?' active':'')+'" data-fkey="'+key+'" data-fval="'+p[0]+'">'+esc(p[1])+'</span>';}).join('')+'</div></div>';
+    // Single-select dropdown (replaces the old pill rows) — button label shows the current value.
+    function ddSingle(label,key,pills){
+      var cur=F[key]; var on=cur!=='all';
+      return '<div class="dd'+(on?' on':'')+'"><button type="button">'+label+': '+esc(pillLabel(pills,cur))+' ▾</button>'+
+        '<div class="ddmenu">'+pills.map(function(p){return '<label><input type="radio" name="ddr-'+key+'" data-skey="'+key+'" value="'+p[0]+'"'+(cur===p[0]?' checked':'')+'>'+esc(p[1])+'</label>';}).join('')+'</div></div>';
     }
+    // Titled radio group inside the Advanced dropdown panel.
+    function ddGroup(title,key,pills){
+      return '<div class="ddsec">'+title+'</div>'+pills.map(function(p){return '<label><input type="radio" name="ddr-'+key+'" data-skey="'+key+'" value="'+p[0]+'"'+(F[key]===p[0]?' checked':'')+'>'+esc(p[1])+'</label>';}).join('');
+    }
+    function advActive(){ return F.score!=='all'||F.match!=='all'||F.source!=='all'||F.trl!=='all'; }
     function ddRow(label,key,items){
       var sel=F[key]; var has=sel.length?' has':'';
       return '<div class="dd'+has+'" data-dd="'+key+'"><button>'+label+(sel.length?(' ('+sel.length+')'):'')+' ▾</button>'+
@@ -502,14 +645,11 @@
     function renderFilters(){
       var fb=document.getElementById('filterbar');
       var isCo = activeTab==='companies';
-      var html='';
+      var html='<div class="filterrow">';
       if(activeTab==='innovators'){
-        html += pillRow('Domain','domain',DOMAIN_PILLS);
-        html += pillRow('TRL','trl',INN_TRL_PILLS);
-        html += pillRow('Stage','stage',STAGE_PILLS);
-        html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Refine</span><div class="pills">'+ddRow('Geography','geos',GEOS)+ddRow('Govt Mission','missions',GOVT_MISSIONS)+'</div></div>';
-        html += pillRow('Ownership Transfer','own',OWN_PILLS);
-        html += pillRow('Indigenous Tech','indigenous',INDIGENOUS_PILLS);
+        html += ddSingle('Domain','domain',DOMAIN_PILLS)+ddSingle('TRL','trl',INN_TRL_PILLS)+ddSingle('Stage','stage',STAGE_PILLS)+
+          ddRow('Geography','geos',GEOS)+ddRow('Govt Mission','missions',GOVT_MISSIONS)+
+          ddSingle('Ownership','own',OWN_PILLS)+ddSingle('Indigenous','indigenous',INDIGENOUS_PILLS)+'</div>';
         var ichips=[];
         function ichip(label,clear){ return '<span class="achip">'+esc(label)+' <b data-clear=\''+clear+'\'>×</b></span>'; }
         if(F.q)ichips.push(ichip('Search: "'+F.q+'"','q'));
@@ -525,22 +665,17 @@
         wireFilters();
         return;
       }
-      html += pillRow('Status','status',STATUS_PILLS);
-      html += '<div class="filterrow" style="margin-bottom:8px"><span class="fgrouplabel">Refine</span><div class="pills">'+
-        ddRow('Sector','sectors',SECTORS)+ddRow('Geography','geos',GEOS)+'</div>';
+      html += ddSingle('Status','status',STATUS_PILLS)+ddRow('Sector','sectors',SECTORS)+ddRow('Geography','geos',GEOS);
       if(isCo){
-        html += '<button class="advtoggle" id="advToggle">Advanced ▾</button>';
+        html += '<div class="dd'+(advActive()?' on':'')+'"><button type="button">Advanced ▾</button><div class="ddmenu wide">'+
+          ddGroup('Score','score',SCORE_PILLS)+
+          ddGroup('Profile Match','match',MATCH_PILLS)+
+          ddGroup('Source','source',SOURCE_PILLS)+
+          ddGroup('TRL','trl',TRL_PILLS)+'</div></div>';
+      } else {
+        html += ddSingle('TRL','trl',TRL_PILLS);
       }
       html += '</div>';
-      if(isCo){
-        html += '<div class="advanced" id="advanced">'+
-          pillRow('Score','score',SCORE_PILLS)+
-          pillRow('Profile Match','match',MATCH_PILLS)+
-          pillRow('Source','source',SOURCE_PILLS)+
-          pillRow('TRL','trl',TRL_PILLS)+'</div>';
-      } else {
-        html += pillRow('TRL','trl',TRL_PILLS);
-      }
       // active chips
       var chips=[];
       function chip(label,clear){ return '<span class="achip">'+esc(label)+' <b data-clear=\''+clear+'\'>×</b></span>'; }
@@ -555,23 +690,24 @@
       if(chips.length)html+='<div class="chips-active">'+chips.join('')+'<button class="clearall" id="clearAll">Clear all filters</button></div>';
       fb.innerHTML=html;
       wireFilters();
-      var adv=document.getElementById('advanced');
-      if(adv&&advOpen)adv.classList.add('show');
     }
-    var advOpen=false;
     function pillLabel(pills,key){ for(var i=0;i<pills.length;i++)if(pills[i][0]===key)return pills[i][1]; return key; }
     function wireFilters(){
       var fb=document.getElementById('filterbar');
-      Array.prototype.forEach.call(fb.querySelectorAll('.pill'),function(p){
-        p.addEventListener('click',function(){ F[p.getAttribute('data-fkey')]=p.getAttribute('data-fval'); renderFilters(); writeURL(); render(); });
-      });
       Array.prototype.forEach.call(fb.querySelectorAll('.dd > button'),function(b){
         b.addEventListener('click',function(e){ e.stopPropagation(); var dd=b.parentNode; var wasOpen=dd.classList.contains('open'); closeDD(); if(!wasOpen)dd.classList.add('open'); });
+      });
+      // Clicks inside an open menu must not bubble to the document-level closeDD.
+      Array.prototype.forEach.call(fb.querySelectorAll('.ddmenu'),function(m){
+        m.addEventListener('click',function(e){ e.stopPropagation(); });
+      });
+      // Single-select (radio) dropdowns — Status / TRL / Domain / Stage / Advanced groups.
+      Array.prototype.forEach.call(fb.querySelectorAll('input[data-skey]'),function(i){
+        i.addEventListener('change',function(){ F[i.getAttribute('data-skey')]=i.value; renderFilters(); writeURL(); render(); });
       });
       Array.prototype.forEach.call(fb.querySelectorAll('input[data-mkey]'),function(i){
         i.addEventListener('change',function(){ var k=i.getAttribute('data-mkey'); var v=i.value; var arr=F[k]; var idx=arr.indexOf(v); if(i.checked&&idx===-1)arr.push(v); else if(!i.checked&&idx!==-1)arr.splice(idx,1); writeURL(); render(); refreshDDLabels(); });
       });
-      var at=document.getElementById('advToggle'); if(at)at.addEventListener('click',function(){ advOpen=!advOpen; document.getElementById('advanced').classList.toggle('show',advOpen); });
       var ca=document.getElementById('clearAll'); if(ca)ca.addEventListener('click',clearAll);
       Array.prototype.forEach.call(fb.querySelectorAll('.achip b'),function(b){
         b.addEventListener('click',function(){ var c=b.getAttribute('data-clear');
@@ -664,7 +800,7 @@
     // ─── Rendering ───────────────────────────────────────────────────────────
     // Each section is guarded so a failure in one (e.g. insights) can never block
     // the rest of the UI — notably the detail panel (was Critical Bug 1).
-    function render(){ try{ if(activeTab==='companies')renderCompanies(); else if(activeTab==='innovators')renderInnovators(); else renderSchemes(); }catch(e){} try{ renderFreshBanner(); }catch(e){} try{ renderInsights(); }catch(e){} }
+    function render(){ try{ if(activeTab==='companies')renderCompanies(); else if(activeTab==='innovators')renderInnovators(); else if(activeTab==='schemes')renderSchemes(); }catch(e){} try{ renderFreshBanner(); }catch(e){} try{ renderOverview(); }catch(e){} }
     function topSector(c){ return c.topSector || '—'; }
 
     function renderCompanies(){
@@ -686,7 +822,7 @@
           '<td><span class="badge '+si.cls+'">'+esc(si.label)+'</span></td>'+
           '<td>'+esc(topSector(c))+'</td>'+
           '<td>'+barHtml(score)+'</td>'+
-          '<td><b style="color:var(--primary)">'+pm+'</b> <span style="color:var(--text-muted);font-size:11px">/100</span></td>'+
+          '<td>'+matchBarHtml(pm)+'</td>'+
           '<td>'+trlBadge(c.trl)+'</td>'+
           '<td class="delcell"><button class="rowdel" data-del="'+esc(c.id)+'" aria-label="Delete">'+TRASH_SVG+'</button></td></tr>';
       }).join('');
@@ -885,7 +1021,7 @@
       if(detailTab==='overview'){
         body+='<div class="actions" style="justify-content:flex-end;margin-bottom:10px"><button class="primary" id="reEnrich">↻ Re-enrich now</button><button id="editBtn">✏ Edit</button></div>';
         body+=freshnessHtml(c.enrichedAt);
-        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Data Score</span></div><div class="top"><span class="num">'+score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span><span class="verdict" style="color:'+verdict.color+'">'+verdict.text+'</span></div><div class="bar"><span style="width:'+score+'%;background:'+verdict.color+'"></span></div></div>';
+        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Data Score</span></div><div class="top"><span class="num">'+score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span><span class="verdict" style="color:'+verdict.color+'">'+verdict.text+'</span></div><div class="bar"><span style="width:'+score+'%;background:'+scoreGrad(score)+'"></span></div></div>';
         body+=field('Top Sectors'+mtag('sector_focus'),chips((c.sectorFocus||[]).slice(0,3)));
         if(c.domainFocus&&c.domainFocus.length)body+=field('Domain Focus',chips(c.domainFocus.map(domainLabel)));
         body+=field('Top Geographies'+mtag('geography_focus'),chips((c.geographyFocus||[]).slice(0,3)));
@@ -914,7 +1050,7 @@
         if(c.estimatedSpend&&c.estimatedSpend.value!=null)inf+=field('CSR Spend <span class="srcbadge estimated">Estimated</span>','₹'+esc(c.estimatedSpend.value)+' Cr'+(c.estimatedSpend.basis?'<div class="hint">Basis: '+esc(c.estimatedSpend.basis)+'</div>':''));
         body+=inf||'';
       } else if(detailTab==='match'){
-        body+='<div class="matchblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Profile Match</span><span class="num">'+pm.score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+pm.score+'%;background:var(--primary)"></span></div><div class="why"><div class="k">Why this match</div>'+((pm.reasons&&pm.reasons.length)?'<ul>'+pm.reasons.map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ul>':'<div class="none">No overlap with your profile yet — set it via ⚙ Our Profile.</div>')+'</div></div>';
+        body+='<div class="matchblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Profile Match</span><span class="num">'+pm.score+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+pm.score+'%;background:'+(pm.score>=40?'var(--grad-purple)':'var(--grey)')+'"></span></div><div class="why"><div class="k">Why this match</div>'+((pm.reasons&&pm.reasons.length)?'<ul>'+pm.reasons.map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ul>':'<div class="none">No overlap with your profile yet — set it via Settings in the sidebar.</div>')+'</div></div>';
         body+=field('TRL Alignment',trlBadge(c.trl)+(c.trl&&c.trl.basis?'<div class="hint">Signals: '+esc(c.trl.basis)+'</div>':'<div class="hint">No readiness signals found in sources.</div>'));
         body+='<div class="field"><div class="k">Best Matching Innovators</div><div id="coInnMatches"><span style="color:var(--text-muted);font-size:12.5px">Loading…</span></div></div>';
       } else {
@@ -1068,7 +1204,7 @@
         body+=field('Patents Filed',esc(n.patentsFiled));
         if(n.awards&&n.awards.length)body+=field('Awards / Recognition','<ul style="padding-left:16px">'+n.awards.map(function(a){return '<li style="font-size:12.5px">'+esc(a)+'</li>';}).join('')+'</ul>');
       } else if(detailTab==='sustainability'){
-        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Sustainability Score</span></div><div class="top"><span class="num">'+(n.sustainabilityScore||0)+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+(n.sustainabilityScore||0)+'%;background:var(--success)"></span></div></div>';
+        body+='<div class="scoreblock"><div class="top"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)">Sustainability Score</span></div><div class="top"><span class="num">'+(n.sustainabilityScore||0)+'<span style="font-size:13px;color:var(--text-muted)"> / 100</span></span></div><div class="bar"><span style="width:'+(n.sustainabilityScore||0)+'%;background:'+scoreGrad(n.sustainabilityScore||0)+'"></span></div></div>';
         var ci=n.circularityIndicators||{};
         var ciLbl=[['closed_loop','Closed Loop'],['zero_waste','Zero Waste'],['renewable_energy','Renewable Energy'],['circular_economy','Circular Economy']];
         body+=field('Circularity Indicators','<div class="chips">'+ciLbl.map(function(p){ return '<span class="chip" style="'+(ci[p[0]]?'color:var(--success);border-color:rgba(22,163,74,.4)':'color:var(--text-muted)')+'">'+(ci[p[0]]?'✓ ':'✗ ')+p[1]+'</span>'; }).join('')+'</div>');
@@ -1251,74 +1387,77 @@
       startBatch(kind,false);
     });
 
-    // ─── Insights (server-computed from real DB data via /api/insights) ──────
-    var insightsData=null;
-    function loadInsights(){ return fetch('/api/insights').then(function(r){return r.json();}).then(function(d){ insightsData=d; renderInsights(); }).catch(function(){}); }
-    function renderInsights(){
-      var grid=document.getElementById('insightsGrid'); if(!grid)return;
-      var d=insightsData; if(!d){ grid.innerHTML='<div class="item"><span class="lead">Loading insights…</span></div>'; return; }
-      var items=[];
-      if(d.bestSector)items.push(['Best sector match','<b>'+esc(d.bestSector)+'</b> ('+d.bestSectorCount+' companies)']);
-      if(d.topGeography)items.push(['Top geography','<b>'+esc(d.topGeography)+'</b> ('+d.topGeographyCount+' companies)']);
-      items.push(['Ready to contact','<b>'+d.readyToContact+'</b> companies · <a href="#" id="insReady">View all</a>']);
-      items.push(['Auto-discovered this week','<b>'+d.autoDiscoveredThisWeek+'</b> new companies']);
-      items.push(['Welfare schemes open','<b>'+d.schemesOpen+'</b> for applications']);
-      items.push(['Average match score','<b>'+d.averageMatch+'</b> / 100']);
-      grid.innerHTML=items.map(function(it){return '<div class="item"><span class="lead">'+it[0]+':</span> '+it[1]+'</div>';}).join('');
-      var ir=document.getElementById('insReady'); if(ir)ir.addEventListener('click',function(e){ e.preventDefault(); activeTab='companies'; setTab(); F.status='complete'; renderFilters(); writeURL(); render(); });
+    // ─── Overview page (replaces the old Insights block; /api/insights + /api/stats) ──
+    var insightsData=null, statsData=null;
+    function loadInsights(){ return fetch('/api/insights').then(function(r){return r.json();}).then(function(d){ insightsData=d; renderOverview(); }).catch(function(){}); }
+    function ovSet(id,v){ var el=document.getElementById(id); if(el)el.textContent=(v==null?'—':v); }
+    function renderOverview(){
+      if(activeTab!=='overview')return;
+      var s=statsData||{}, c=s.companyCounts||{}, d=insightsData||{};
+      var loaded=!!statsData; // show em-dash only before the first stats fetch
+      ovSet('ov-companies',loaded?(s.totalCompanies||0):null);
+      ovSet('ov-ready',d.readyToContact!=null?d.readyToContact:(loaded?(c.complete||0):null));
+      ovSet('ov-review',loaded?(s.pendingReviews||0):null);
+      ovSet('ov-verified',loaded?(c.verified||0):null);
+      ovSet('ov-innovators',loaded?(s.totalInnovators||0):null);
+      ovSet('ov-schemes',loaded?(s.totalSchemes||0):null);
+      ovSet('ov-match',d.averageMatch!=null?(d.averageMatch+' / 100'):null);
+      ovSet('ov-auto',insightsData?(d.autoDiscoveredThisWeek||0):null);
     }
+    document.getElementById('ov-readyCard').addEventListener('click',function(){ activeTab='companies'; F.status='complete'; setTab(); renderFilters(); writeURL(); render(); });
 
-    // ─── Notifications ───────────────────────────────────────────────────────
-    function snapshot(){ var sc={}; companies.forEach(function(c){sc[c.id]=(c.profileMatch&&c.profileMatch.score)||0;}); var st={}; companies.forEach(function(c){st[c.id]=statusGroup(c.status);}); return {count:companies.length,scores:sc,statuses:st,at:Date.now()}; }
-    function loadSnap(){ try{return JSON.parse(localStorage.getItem('csr_snapshot')||'null');}catch(e){return null;} }
-    function saveSnap(){ try{localStorage.setItem('csr_snapshot',JSON.stringify(snapshot()));}catch(e){} }
-    var notifications=[];
-    function computeNotifications(){
-      notifications=[]; var prev=loadSnap(); if(!prev)return;
-      var newN=companies.length-prev.count; if(newN>0)notifications.push({ic:'✦',text:newN+' new companies discovered',sub:'since your last visit'});
-      var moved=0; companies.forEach(function(c){ if(prev.statuses[c.id]&&prev.statuses[c.id]!=='complete'&&statusGroup(c.status)==='complete')moved++; });
-      if(moved>0)notifications.push({ic:'✓',text:moved+' companies moved to Ready status',sub:'now ready to contact'});
-      companies.forEach(function(c){ var was=prev.scores[c.id]; var now=(c.profileMatch&&c.profileMatch.score)||0; if(was!=null&&now>was)notifications.push({ic:'📈',text:esc(c.name)+' profile match improved from '+was+' → '+now,sub:'click to view',id:c.id,kind:'company'}); });
-      // scheme deadlines within 7 days (only if parseable)
-      schemes.forEach(function(s){ var d=Date.parse(s.applicationDeadline); if(!isNaN(d)){ var days=Math.ceil((d-Date.now())/864e5); if(days>=0&&days<=7)notifications.push({ic:'⏰',text:'Welfare scheme deadline in '+days+' days: '+esc(s.name),sub:s.ministry,id:s.id,kind:'scheme'}); } });
-    }
-    function renderNotifications(){
-      computeNotifications();
-      var dot=document.getElementById('bellDot'); dot.textContent=notifications.length; dot.classList.toggle('show',notifications.length>0);
-      var list=document.getElementById('notifList');
-      list.innerHTML=notifications.length?notifications.map(function(n,i){return '<div class="nitem" data-ni="'+i+'"><div class="ic">'+n.ic+'</div><div class="tx">'+n.text+'<div class="sub">'+esc(n.sub||'')+'</div></div></div>';}).join(''):'<div class="nempty">No new updates.</div>';
-      Array.prototype.forEach.call(list.querySelectorAll('.nitem'),function(el){ el.addEventListener('click',function(){ var n=notifications[Number(el.getAttribute('data-ni'))]; if(n&&n.id){ if(n.kind==='scheme'){activeTab='schemes';setTab();render();selectScheme(n.id);} else {activeTab='companies';setTab();render();selectCompany(n.id);} document.getElementById('notifPanel').classList.remove('show'); } }); });
-    }
-    document.getElementById('bellBtn').addEventListener('click',function(e){ e.stopPropagation(); document.getElementById('notifPanel').classList.toggle('show'); });
-    document.getElementById('notifPanel').addEventListener('click',function(e){ e.stopPropagation(); });
-    document.getElementById('notifReadAll').addEventListener('click',function(){ saveSnap(); notifications=[]; renderNotifications(); document.getElementById('notifPanel').classList.remove('show'); showToast('All caught up'); });
+    // ─── Notifications: bell UI removed in the sidebar redesign. Server-side ──
+    // data (statuses, profile-match history) is untouched; reintroduce a
+    // client renderer here if notifications ever come back.
 
-    // ─── Tabs ────────────────────────────────────────────────────────────────
+    // ─── Sidebar navigation (was Tabs) ───────────────────────────────────────
+    var PAGE_META={
+      overview:{t:'Overview',s:'Portfolio at a glance — companies, welfare schemes and innovators'},
+      companies:{t:'Companies',s:'Deterministic discovery, enrichment and verification'},
+      schemes:{t:'Welfare Schemes',s:'Government schemes with sector, geography and TRL fit'},
+      innovators:{t:'Innovators',s:'Startups, individual innovators and research institutes'}
+    };
     function setTab(){
+      document.getElementById('tabOverview').classList.toggle('active',activeTab==='overview');
       document.getElementById('tabCompanies').classList.toggle('active',activeTab==='companies');
       document.getElementById('tabSchemes').classList.toggle('active',activeTab==='schemes');
       document.getElementById('tabInnovators').classList.toggle('active',activeTab==='innovators');
-      document.getElementById('listTitle').textContent=activeTab==='companies'?'Companies':activeTab==='innovators'?'Innovators':'Welfare Schemes';
-      document.getElementById('st-total-l').textContent=activeTab==='companies'?'Total Companies':activeTab==='innovators'?'Total Innovators':'Total Schemes';
+      var meta=PAGE_META[activeTab]||PAGE_META.companies;
+      document.getElementById('pageTitle').textContent=meta.t;
+      document.getElementById('pageSub').textContent=meta.s;
+      var ov=activeTab==='overview';
+      document.getElementById('overviewArea').style.display=ov?'':'none';
+      document.getElementById('stats').style.display=ov?'none':'';
+      document.getElementById('controls').style.display=ov?'none':'';
+      document.getElementById('filterbar').style.display=ov?'none':'';
+      document.getElementById('mainArea').style.display=ov?'none':'';
+      if(!ov){
+        document.getElementById('listTitle').textContent=activeTab==='companies'?'Companies':activeTab==='innovators'?'Innovators':'Welfare Schemes';
+        document.getElementById('st-total-l').textContent=activeTab==='companies'?'Total Companies':activeTab==='innovators'?'Total Innovators':'Total Schemes';
+      }
       document.getElementById('addBtn').style.display=activeTab==='companies'?'':'none';
       document.getElementById('reenrichAllHdrBtn').style.display=(activeTab==='companies'||activeTab==='innovators')?'':'none';
       document.getElementById('addInnBtn').style.display=activeTab==='innovators'?'':'none';
       document.getElementById('importInnBtn').style.display=activeTab==='innovators'?'':'none';
       document.getElementById('tmplInnBtn').style.display=activeTab==='innovators'?'':'none';
+      document.getElementById('csvBtn').style.display=ov?'none':'';
       document.getElementById('detail').innerHTML='<div class="empty">Select an item to see details.</div>';
       selectedId=null;
       renderFilters(); updateBulkBar(); loadStats();
+      if(ov)renderOverview();
     }
-    // Sort state is per-table — reset on tab CLICKS only (not in setTab, which
+    // Sort state is per-table — reset on nav CLICKS only (not in setTab, which
     // also runs at init after readURL has restored ?sort= from the URL).
+    document.getElementById('tabOverview').addEventListener('click',function(){ activeTab='overview'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
     document.getElementById('tabCompanies').addEventListener('click',function(){ activeTab='companies'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
     document.getElementById('tabSchemes').addEventListener('click',function(){ activeTab='schemes'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
     document.getElementById('tabInnovators').addEventListener('click',function(){ activeTab='innovators'; SORT={key:null,dir:0}; setTab(); writeURL(); render(); });
+    document.getElementById('navSearch').addEventListener('click',function(){ openGlobalSearch(); });
 
     // ─── Loaders ─────────────────────────────────────────────────────────────
-    function loadStats(){ fetch('/api/stats').then(function(r){return r.json();}).then(function(s){ var c=s.companyCounts||{}; document.getElementById('st-total').textContent=activeTab==='companies'?(s.totalCompanies!=null?s.totalCompanies:0):activeTab==='innovators'?(s.totalInnovators||0):(s.totalSchemes||0); document.getElementById('st-ready').textContent=c.complete||0; document.getElementById('st-review').textContent=s.pendingReviews||0; document.getElementById('st-verified').textContent=c.verified||0; }).catch(function(){}); }
-    function loadCompanies(){ return fetch('/api/companies').then(function(r){return r.json();}).then(function(list){ companies=Array.isArray(list)?list:[]; render(); renderNotifications(); }).catch(function(){ document.getElementById('rows').innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">Could not load companies.</td></tr>'; }); }
-    function loadSchemes(){ return fetch('/api/schemes').then(function(r){return r.json();}).then(function(list){ schemes=Array.isArray(list)?list:[]; if(activeTab==='schemes')render(); renderInsights(); renderNotifications(); }).catch(function(){}); }
+    function loadStats(){ fetch('/api/stats').then(function(r){return r.json();}).then(function(s){ statsData=s; var c=s.companyCounts||{}; document.getElementById('st-total').textContent=activeTab==='companies'?(s.totalCompanies!=null?s.totalCompanies:0):activeTab==='innovators'?(s.totalInnovators||0):(s.totalSchemes||0); document.getElementById('st-ready').textContent=c.complete||0; document.getElementById('st-review').textContent=s.pendingReviews||0; document.getElementById('st-verified').textContent=c.verified||0; renderOverview(); }).catch(function(){}); }
+    function loadCompanies(){ return fetch('/api/companies').then(function(r){return r.json();}).then(function(list){ companies=Array.isArray(list)?list:[]; render(); }).catch(function(){ document.getElementById('rows').innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">Could not load companies.</td></tr>'; }); }
+    function loadSchemes(){ return fetch('/api/schemes').then(function(r){return r.json();}).then(function(list){ schemes=Array.isArray(list)?list:[]; if(activeTab==='schemes')render(); renderOverview(); }).catch(function(){}); }
     function loadInnovators(){ return fetch('/api/innovators').then(function(r){return r.json();}).then(function(list){ innovators=Array.isArray(list)?list:[]; if(activeTab==='innovators')render(); }).catch(function(){ if(activeTab==='innovators')document.getElementById('rows').innerHTML='<tr><td colspan="8" style="color:var(--text-muted);padding:24px">Could not load innovators.</td></tr>'; }); }
 
     // ─── Profile ─────────────────────────────────────────────────────────────
@@ -1340,15 +1479,38 @@
     document.getElementById('profileSave').addEventListener('click',saveProfile);
     document.getElementById('profileModal').addEventListener('click',function(e){ if(e.target===this)closeProfile(); });
 
-    // ─── Desktop auto-update (visible only inside the Electron shell) ────────
-    if(window.csrDesktop&&window.csrDesktop.checkForUpdates){
-      document.getElementById('updateGroup').style.display='';
-      var updStatus=document.getElementById('updateStatus');
-      if(window.csrDesktop.appVersion){ window.csrDesktop.appVersion().then(function(v){ updStatus.textContent='Installed version: '+v; }).catch(function(){}); }
-      if(window.csrDesktop.onUpdateStatus){ window.csrDesktop.onUpdateStatus(function(text){ updStatus.textContent=text; }); }
-      document.getElementById('updateCheckBtn').addEventListener('click',function(){ var b=this; b.disabled=true; updStatus.textContent='Checking…';
-        window.csrDesktop.checkForUpdates().then(function(msg){ updStatus.textContent=msg; }).catch(function(){ updStatus.textContent='Update check failed.'; }).then(function(){ b.disabled=false; }); });
-    }
+    // ─── Desktop auto-update: sidebar strip + Settings panel button ──────────
+    // Main process checks on EVERY launch (10s after ready) and every 4h after;
+    // strip default is "Up to date · v{version} · checked on launch", flipping
+    // to "Update available — Restart" once a download completes.
+    (function(){
+      var t1=document.getElementById('updT1'), t2=document.getElementById('updT2');
+      var dot=document.getElementById('updDot'), rb=document.getElementById('updRestart');
+      if(window.csrDesktop&&window.csrDesktop.checkForUpdates){
+        document.getElementById('updateGroup').style.display='';
+        var updStatus=document.getElementById('updateStatus');
+        var appV='';
+        if(window.csrDesktop.appVersion){ window.csrDesktop.appVersion().then(function(v){ appV=v; updStatus.textContent='Installed version: '+v; t2.textContent='v'+v+' · checked on launch'; }).catch(function(){}); }
+        function applyState(state,version){
+          if(state==='downloaded'){ t1.textContent='Update available'; t2.textContent=(version?'v'+version+' ':'')+'ready — restart to apply'; dot.classList.add('warn'); rb.style.display=''; }
+          else if(state==='available'){ t1.textContent='Update found'; t2.textContent='downloading'+(version?' v'+version:'')+'…'; dot.classList.add('warn'); rb.style.display='none'; }
+          else if(state==='error'){ t1.textContent='Update check failed'; t2.textContent='will retry · v'+(appV||'?'); dot.classList.remove('warn'); rb.style.display='none'; }
+          else { t1.textContent='Up to date'; t2.textContent='v'+(appV||'?')+' · checked on launch'; dot.classList.remove('warn'); rb.style.display='none'; }
+        }
+        if(window.csrDesktop.onUpdateState){ window.csrDesktop.onUpdateState(function(p){ applyState(p&&p.state,p&&p.version); }); }
+        if(window.csrDesktop.onUpdateStatus){ window.csrDesktop.onUpdateStatus(function(text){ updStatus.textContent=text;
+          if(!window.csrDesktop.onUpdateState){ // older preload: infer strip state from the status text
+            if(/downloaded/i.test(text))applyState('downloaded'); else if(/found|downloading/i.test(text))applyState('available'); else if(/failed|error/i.test(text))applyState('error'); else applyState('none');
+          } }); }
+        rb.addEventListener('click',function(){ rb.disabled=true; rb.textContent='Restarting…';
+          (window.csrDesktop.restartToUpdate?window.csrDesktop.restartToUpdate():Promise.reject()).catch(function(){ rb.disabled=false; rb.textContent='Restart'; showToast('Could not restart — use the update dialog instead'); }); });
+        document.getElementById('updateCheckBtn').addEventListener('click',function(){ var b=this; b.disabled=true; updStatus.textContent='Checking…';
+          window.csrDesktop.checkForUpdates().then(function(msg){ updStatus.textContent=msg; }).catch(function(){ updStatus.textContent='Update check failed.'; }).then(function(){ b.disabled=false; }); });
+      } else {
+        t1.textContent='Local dashboard';
+        t2.textContent='browser mode — updates ship with the desktop app';
+      }
+    })();
 
     // ─── Manual CRUD ─────────────────────────────────────────────────────────
     function openAdd(){ document.getElementById('addName').value=''; var st=document.getElementById('addStatus'); st.style.display='none'; st.textContent=''; document.getElementById('addModal').classList.add('show'); setTimeout(function(){document.getElementById('addName').focus();},50); }
@@ -1512,6 +1674,7 @@
     function addCompanyFromLead(name){ fetch('/api/companies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});}).then(function(res){ if(!res.ok){ showToast((res.j&&res.j.error)||'Could not add'); return; } closeGlobalSearch(); activeTab='companies'; setTab(); writeURL(); loadCompanies(); showToast('Added “'+name+'” — enriching now'); openEnrichProgress(res.j.id,function(){ selectCompany(res.j.id); }); }).catch(function(){ showToast('Request failed'); }); }
     function addInnovatorFromLead(name){ closeGlobalSearch(); activeTab='innovators'; setTab(); writeURL(); render(); openAddInn(); document.getElementById('innName').value=name; showToast('Pick a domain, then Add & Research'); }
     document.getElementById('globalSearchBtn').addEventListener('click',openGlobalSearch);
+    document.getElementById('globalSearchBtn').addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openGlobalSearch(); } });
     document.getElementById('searchClose').addEventListener('click',closeGlobalSearch);
     document.getElementById('searchModal').addEventListener('click',function(e){ if(e.target===this)closeGlobalSearch(); });
     document.getElementById('globalSearchInput').addEventListener('input',function(e){ var q=e.target.value.trim(); clearTimeout(searchTimer); searchTimer=setTimeout(function(){ runGlobalSearch(q,false); },300); });
@@ -1523,7 +1686,7 @@
     Promise.all([loadCompanies(),loadSchemes(),loadInnovators()]).then(function(){ render();
       // Deep link: ?select=<id> opens the detail panel for that row on load.
       var sel=new URLSearchParams(location.search).get('select');
-      if(sel){ if(activeTab==='innovators')selectInnovator(sel); else if(activeTab==='schemes')selectScheme(sel); else selectCompany(sel); }
+      if(sel&&activeTab!=='overview'){ if(activeTab==='innovators')selectInnovator(sel); else if(activeTab==='schemes')selectScheme(sel); else selectCompany(sel); }
     });
     setInterval(loadStats,15000);
     setInterval(loadInsights,20000);

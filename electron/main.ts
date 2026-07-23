@@ -139,6 +139,12 @@ function sendUpdateStatus(text: string): void {
   mainWindow?.webContents.send('updates:status', text);
 }
 
+/** Structured state for the sidebar update strip (renderer: updT1/updT2/updRestart). */
+type UpdateState = 'none' | 'available' | 'downloaded' | 'error';
+function sendUpdateState(state: UpdateState, version?: string): void {
+  mainWindow?.webContents.send('updates:state', { state, version: version ?? null });
+}
+
 /** electron-updater errors embed multi-line HTTP header dumps — keep the gist. */
 function briefError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
@@ -150,14 +156,22 @@ function setupAutoUpdater(): void {
   autoUpdater.logger = console;
   autoUpdater.autoDownload = true;
 
-  autoUpdater.on('update-available', info => sendUpdateStatus(`Update ${info.version} found — downloading in the background…`));
-  autoUpdater.on('update-not-available', () => sendUpdateStatus(`You are on the latest version (${app.getVersion()}).`));
+  autoUpdater.on('update-available', info => {
+    sendUpdateStatus(`Update ${info.version} found — downloading in the background…`);
+    sendUpdateState('available', info.version);
+  });
+  autoUpdater.on('update-not-available', () => {
+    sendUpdateStatus(`You are on the latest version (${app.getVersion()}).`);
+    sendUpdateState('none', app.getVersion());
+  });
   autoUpdater.on('error', err => {
     console.error('Auto-update error (non-fatal):', err?.message ?? err);
     sendUpdateStatus(`Update check failed: ${briefError(err ?? 'unknown error')}`);
+    sendUpdateState('error');
   });
   autoUpdater.on('update-downloaded', info => {
     sendUpdateStatus(`Update ${info.version} downloaded — restart to apply.`);
+    sendUpdateState('downloaded', info.version);
     if (!mainWindow) return;
     void dialog.showMessageBox(mainWindow, {
       type: 'info',
@@ -180,12 +194,21 @@ function setupAutoUpdater(): void {
       console.error('Update check failed (non-fatal):', err instanceof Error ? err.message : String(err));
     });
   };
-  setTimeout(check, 10_000); // let the window and server settle first
+  // Fires on EVERY app launch (setupAutoUpdater runs from app.whenReady) —
+  // the 10s delay only lets the window and server settle first.
+  setTimeout(check, 10_000);
   setInterval(check, UPDATE_CHECK_INTERVAL_MS).unref?.();
 }
 
-// IPC for the dashboard's "Check for updates" button (gear panel).
+// IPC for the dashboard's "Check for updates" button (Settings panel) and the
+// sidebar update strip's Restart action.
 ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('updates:restart', () => {
+  if (!app.isPackaged) return 'Restart-to-update only works in the installed app.';
+  stopServer(); // free port + kill Chromium before the installer relaunches us
+  autoUpdater.quitAndInstall();
+  return 'Restarting…';
+});
 ipcMain.handle('updates:check', async (): Promise<string> => {
   if (!app.isPackaged) return 'Update checks only run in the installed app (dev mode detected).';
   try {
