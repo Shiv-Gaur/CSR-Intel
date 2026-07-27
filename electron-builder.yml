@@ -30,10 +30,12 @@ extraResources:
   # First-run seed DB — copied to userData by electron/main.ts if absent.
   - from: build/seed/csr-intel.db
     to: csr-intel.db
-  # Bundled Chromium for the Puppeteer JS-render fallback (fresh machines
-  # have no ~/.cache/puppeteer). main.ts sets PUPPETEER_EXECUTABLE_PATH.
-  - from: build/chromium/chrome-win64
-    to: chrome/chrome-win64
+  # Bundled chrome-headless-shell for the Puppeteer JS-render fallback (fresh
+  # machines have no ~/.cache/puppeteer). The shell binary (not full Chrome)
+  # avoids the OS external-protocol dialog flash — see browser-fetcher.ts.
+  # main.ts sets PUPPETEER_EXECUTABLE_PATH.
+  - from: build/chromium/chrome-headless-shell-win64
+    to: chrome/chrome-headless-shell-win64
 
 # Rebuilds native deps (better-sqlite3) against the Electron ABI — required
 # because the packaged server child runs under ELECTRON_RUN_AS_NODE.

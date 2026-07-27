@@ -94,9 +94,11 @@ async function startServer(): Promise<void> {
   if (app.isPackaged) {
     nodeBin = process.execPath;
     env.ELECTRON_RUN_AS_NODE = '1';
-    // Bundled Chromium for the Puppeteer fallback (a fresh machine has no
-    // ~/.cache/puppeteer). browser-fetcher reads this through config.ts.
-    const bundledChrome = path.join(process.resourcesPath, 'chrome', 'chrome-win64', 'chrome.exe');
+    // Bundled chrome-headless-shell for the Puppeteer fallback (a fresh machine
+    // has no ~/.cache/puppeteer). The shell binary (not full Chrome) avoids the
+    // OS external-protocol dialog flash — see src/tools/browser-fetcher.ts.
+    // browser-fetcher reads this through config.ts.
+    const bundledChrome = path.join(process.resourcesPath, 'chrome', 'chrome-headless-shell-win64', 'chrome-headless-shell.exe');
     if (fs.existsSync(bundledChrome)) env.PUPPETEER_EXECUTABLE_PATH = bundledChrome;
   }
 

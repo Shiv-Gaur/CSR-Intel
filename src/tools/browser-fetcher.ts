@@ -39,7 +39,11 @@ async function getBrowser(): Promise<Browser> {
   if (browser?.connected) return browser;
   if (!launching) {
     launching = puppeteer.launch({
-      headless: true,
+      // chrome-headless-shell, not full-Chrome new-headless: the shell binary has
+      // no Windows external-protocol/ShellExecute path, so a page firing a custom
+      // scheme (e.g. logged-out LinkedIn's linkedin:// deep-link) can no longer
+      // pop the OS "How do you want to open this?" (PickerHost) dialog mid-fetch.
+      headless: 'shell',
       // Packaged builds ship Chromium in resources/ (no puppeteer cache on a
       // fresh machine); dev leaves this empty and uses the normal cache.
       ...(config.puppeteerExecutablePath ? { executablePath: config.puppeteerExecutablePath } : {}),
