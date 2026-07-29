@@ -61,11 +61,14 @@ win:
   icon: electron/icon.ico
 
 nsis:
-  oneClick: false
-  # perMachine false + assisted installer → the user picks "all users"
-  # (Program Files, needs admin) or "only me" (per-user, no elevation).
+  # oneClick single-location per-user installer — no wizard on first install and,
+  # crucially, the ONLY installer type that electron-updater's silent auto-update
+  # (quitAndInstall(true, …) → NSIS `/S`) can drive with zero installer UI.
+  # An assisted (oneClick:false) installer ignores /S and would flash its wizard
+  # on every update. perMachine:false keeps installs per-user (no UAC elevation).
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
+  allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: CSR Funding Intelligence

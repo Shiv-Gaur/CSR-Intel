@@ -43,7 +43,10 @@
         radial-gradient(circle at 8% 92%, rgba(129,140,248,0.16), transparent 45%),
         linear-gradient(155deg, #eef0fc 0%, #e7ecfb 30%, #f3edf9 65%, #eef4fc 100%);
       background-attachment: fixed;
-      display:flex; min-height:100vh;
+      /* Fixed viewport shell: the body itself never scrolls — the sidebar is
+         position:fixed and .content owns the only scroll region. This keeps the
+         sidebar pinned regardless of table length (175+ rows). */
+      display:flex; height:100vh; overflow:hidden;
     }
     a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
     button { font-family: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); color: var(--ink); padding: 8px 14px; border-radius: 9px; transition: background .12s, border-color .12s; }
@@ -63,7 +66,9 @@
       border-right:1px solid var(--line);
       display:flex; flex-direction:column;
       padding:18px 14px;
-      position:sticky; top:0; height:100vh;
+      /* Fixed to the viewport (not sticky): structurally isolated from page
+         scroll so it can never scroll away. .content is offset by 236px to match. */
+      position:fixed; top:0; left:0; height:100vh; z-index:20; overflow-y:auto;
     }
     .brand { display:flex; flex-direction:column; gap:10px; padding:2px 4px 16px; margin-bottom:10px; border-bottom:1px solid var(--line); }
     .logo-chip {
@@ -99,7 +104,9 @@
     .update-strip button { margin-left:auto; padding:4px 9px; font-size:11.5px; border-radius:7px; flex-shrink:0; }
 
     /* ── Main column ── */
-    .content { flex:1; padding:22px 30px 40px; min-width:0; }
+    /* margin-left matches the fixed sidebar width (236px); .content is the sole
+       scroll container (body/html do not scroll), so the sidebar stays put. */
+    .content { flex:1; margin-left:236px; height:100vh; overflow-y:auto; padding:22px 30px 40px; min-width:0; }
     .wrap { max-width:1380px; margin:0 auto; }
     .topbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
     .search {
@@ -1255,6 +1262,13 @@
         return '<div style="font-size:12.5px;margin-bottom:3px">'+(s.success?'<span style="color:var(--success)">✓</span>':'<span style="color:var(--text-muted)">✗</span>')+' '+esc(s.label||'')+' <span class="csub">('+esc(dom)+(s.success?', '+s.chars+' chars':', no usable text')+')</span></div>';
       }).join('');
     }
+    // Polls /enrichment-status ~1s. The per-source progress arrives once the
+    // worker claims the task; before that the task sits 'pending' behind any
+    // in-flight enrichment, so we show a LIVE elapsed counter (never a frozen
+    // "Queued" line) and, past a patience threshold, an honest "worker is busy"
+    // note. On done: show the final sources + auto-close. On fail/stall: a clear
+    // state, not an infinite queue.
+    var ENRICH_POLL_MS=1000, ENRICH_PENDING_PATIENCE_S=120;
     function openEnrichProgress(id,onDone){
       stopEnrichPoll(); enrichPoll.id=id;
       var name=(companies.filter(function(c){return c.id===id;})[0]||{}).name||'company';
@@ -1262,25 +1276,45 @@
       document.getElementById('enrichStage').textContent='Queued — waiting for the worker…';
       document.getElementById('enrichSources').innerHTML='';
       document.getElementById('enrichModal').classList.add('show');
-      var idleTicks=0;
+      var startedAt=Date.now(), sawRunning=false, idleTicks=0;
+      function setStage(t){ document.getElementById('enrichStage').textContent=t; }
+      function secs(){ return Math.round((Date.now()-startedAt)/1000); }
+      function finish(ok){ stopEnrichPoll(); loadCompanies(); loadStats(); if(selectedId===id)selectCompany(id); if(onDone)onDone(ok); }
       function tick(){
         if(enrichPoll.id!==id)return;
         fetch('/api/companies/'+id+'/enrichment-status').then(function(r){return r.json();}).then(function(st){
           if(enrichPoll.id!==id)return;
           var p=st.progress;
+          // Ignore a finished progress record left over from a PREVIOUS run (kept
+          // ~10min server-side): if it finished before we opened this modal it's
+          // stale — keep showing "queued" until THIS run's fresh progress appears.
+          if(p&&(p.state==='done'||p.state==='failed')&&p.finishedAt&&Date.parse(p.finishedAt)<startedAt) p=null;
           if(p){
-            document.getElementById('enrichStage').textContent=p.stage||'Working…';
-            renderEnrichSources(p.sources);
+            sawRunning=true;
             if(p.state==='done'||p.state==='failed'){
-              document.getElementById('enrichStage').textContent=(p.state==='done'?'✅ Done — this data was fetched just now ('+fmtDateTime(p.finishedAt)+')':'⚠ '+(p.error||'Failed'));
-              stopEnrichPoll(); loadCompanies(); loadStats(); if(selectedId===id)selectCompany(id); if(onDone)onDone(p.state==='done');
+              renderEnrichSources(p.sources);
+              if(p.state==='done'){
+                setStage('✅ Done — updated just now ('+fmtDateTime(p.finishedAt)+'). Closing…');
+                finish(true);
+                enrichPoll.timer=setTimeout(closeEnrichModal,2500); // auto-close; manual Close still works
+              } else {
+                setStage('⚠ Enrichment failed — '+(p.error||'unknown error')+'. You can retry, or close this.');
+                finish(false); // leave the modal open on failure so the reason stays visible
+              }
               return;
             }
-          } else if(st.queueStatus==='pending'){ document.getElementById('enrichStage').textContent='Queued — waiting for the worker (runs within ~5s)…'; }
-          else if(st.queueStatus==='running'){ document.getElementById('enrichStage').textContent='Starting…'; }
-          else { idleTicks++; if(idleTicks>5){ document.getElementById('enrichStage').textContent='No active run found. Last enriched: '+(st.lastEnrichedAt?fmtDateTime(st.lastEnrichedAt):'never'); stopEnrichPoll(); if(onDone)onDone(false); return; } }
-          enrichPoll.timer=setTimeout(tick,2000);
-        }).catch(function(){ if(enrichPoll.id===id)enrichPoll.timer=setTimeout(tick,2000); });
+            setStage(p.stage||'Working…');
+            renderEnrichSources(p.sources);
+          } else if(st.queueStatus==='running'){ setStage('Starting…'); }
+          else if(st.queueStatus==='pending'){
+            setStage(secs()<ENRICH_PENDING_PATIENCE_S
+              ? 'Queued — the worker will start this shortly… ('+secs()+'s)'
+              : 'Still queued after '+secs()+'s — the worker is busy finishing other companies. It will start automatically; you can close this and check back.');
+          }
+          else if(sawRunning){ setStage('Finishing up…'); }
+          else { idleTicks++; if(idleTicks>5){ setStage('No active run found. Last enriched: '+(st.lastEnrichedAt?fmtDateTime(st.lastEnrichedAt):'never')); stopEnrichPoll(); if(onDone)onDone(false); return; } }
+          enrichPoll.timer=setTimeout(tick,ENRICH_POLL_MS);
+        }).catch(function(){ if(enrichPoll.id===id)enrichPoll.timer=setTimeout(tick,ENRICH_POLL_MS); });
       }
       tick();
     }
@@ -1307,7 +1341,7 @@
       if(b.id&&b.last){ // batch running (or just finished): live progress replaces the banner
         var st=b.last, doneAll=st.done+st.failed, pct=st.total?Math.round(doneAll*100/st.total):0;
         var eta=(doneAll<5)?'Estimating…':(st.estimated_seconds_remaining!=null?'~'+fmtDur(st.estimated_seconds_remaining):'—');
-        var cur=st.current_company_name?('Currently: <b>'+esc(st.current_company_name)+'</b>'+(st.current_source?' — '+esc(String(st.current_source).replace(/…$/,''))+'':'')):'Waiting for the worker…';
+        var cur=st.current_company_name?('Currently: <b>'+esc(st.current_company_name)+'</b>'+(st.current_source?' — '+esc(String(st.current_source).replace(/…$/,''))+'':'')):'Queued — the worker will start the next company shortly…';
         el.innerHTML='<div style="border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:10px;padding:10px 14px;margin-bottom:12px">'+
           '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px"><b>Re-enriching '+doneAll+' of '+st.total+' '+(kind==='company'?'companies':'innovators')+'</b>'+
           '<span class="csub">done '+st.done+' · queued '+st.queued+' · failed '+st.failed+'</span></div>'+
@@ -1481,8 +1515,9 @@
 
     // ─── Desktop auto-update: sidebar strip + Settings panel button ──────────
     // Main process checks on EVERY launch (10s after ready) and every 4h after;
-    // strip default is "Up to date · v{version} · checked on launch", flipping
-    // to "Update available — Restart" once a download completes.
+    // strip default is "Up to date · v{version} · checked on launch", then shows
+    // live "Downloading update… X%" and finally "Update ready · restarting…" —
+    // the update installs silently and relaunches on its own (no button, no wizard).
     (function(){
       var t1=document.getElementById('updT1'), t2=document.getElementById('updT2');
       var dot=document.getElementById('updDot'), rb=document.getElementById('updRestart');
@@ -1491,13 +1526,16 @@
         var updStatus=document.getElementById('updateStatus');
         var appV='';
         if(window.csrDesktop.appVersion){ window.csrDesktop.appVersion().then(function(v){ appV=v; updStatus.textContent='Installed version: '+v; t2.textContent='v'+v+' · checked on launch'; }).catch(function(){}); }
-        function applyState(state,version){
-          if(state==='downloaded'){ t1.textContent='Update available'; t2.textContent=(version?'v'+version+' ':'')+'ready — restart to apply'; dot.classList.add('warn'); rb.style.display=''; }
+        function applyState(state,version,percent){
+          // Updates apply automatically and silently (main calls quitAndInstall(true,true))
+          // — the strip only reports progress; the manual Restart button stays hidden.
+          if(state==='downloading'){ t1.textContent='Downloading update'; t2.textContent=(typeof percent==='number'&&percent>=0?percent+'%':'…'); dot.classList.add('warn'); rb.style.display='none'; }
+          else if(state==='downloaded'){ t1.textContent='Update ready'; t2.textContent='restarting…'; dot.classList.add('warn'); rb.style.display='none'; }
           else if(state==='available'){ t1.textContent='Update found'; t2.textContent='downloading'+(version?' v'+version:'')+'…'; dot.classList.add('warn'); rb.style.display='none'; }
           else if(state==='error'){ t1.textContent='Update check failed'; t2.textContent='will retry · v'+(appV||'?'); dot.classList.remove('warn'); rb.style.display='none'; }
           else { t1.textContent='Up to date'; t2.textContent='v'+(appV||'?')+' · checked on launch'; dot.classList.remove('warn'); rb.style.display='none'; }
         }
-        if(window.csrDesktop.onUpdateState){ window.csrDesktop.onUpdateState(function(p){ applyState(p&&p.state,p&&p.version); }); }
+        if(window.csrDesktop.onUpdateState){ window.csrDesktop.onUpdateState(function(p){ applyState(p&&p.state,p&&p.version,p&&p.percent); }); }
         if(window.csrDesktop.onUpdateStatus){ window.csrDesktop.onUpdateStatus(function(text){ updStatus.textContent=text;
           if(!window.csrDesktop.onUpdateState){ // older preload: infer strip state from the status text
             if(/downloaded/i.test(text))applyState('downloaded'); else if(/found|downloading/i.test(text))applyState('available'); else if(/failed|error/i.test(text))applyState('error'); else applyState('none');

@@ -18,7 +18,7 @@
  * (e.g. `npm run dev` during development), the window just attaches to it and
  * does NOT own its lifecycle (no kill on quit).
  */
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import electronUpdater from 'electron-updater';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
@@ -141,16 +141,27 @@ function sendUpdateStatus(text: string): void {
   mainWindow?.webContents.send('updates:status', text);
 }
 
-/** Structured state for the sidebar update strip (renderer: updT1/updT2/updRestart). */
-type UpdateState = 'none' | 'available' | 'downloaded' | 'error';
-function sendUpdateState(state: UpdateState, version?: string): void {
-  mainWindow?.webContents.send('updates:state', { state, version: version ?? null });
+/** Structured state for the sidebar update strip (renderer: updT1/updT2). The
+ *  `downloading` state carries a percent so the strip can show live progress. */
+type UpdateState = 'none' | 'available' | 'downloading' | 'downloaded' | 'error';
+function sendUpdateState(state: UpdateState, version?: string, percent?: number): void {
+  mainWindow?.webContents.send('updates:state', { state, version: version ?? null, percent: percent ?? null });
 }
 
 /** electron-updater errors embed multi-line HTTP header dumps — keep the gist. */
 function briefError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.split('\n')[0].trim().slice(0, 160);
+}
+
+/** The ONLY quitAndInstall call site. Frees the port/Chromium, then hands off to
+ *  the oneClick NSIS installer with isSilent=true (passes `/S` → no installer
+ *  window) and isForceRunAfter=true (relaunch after install). Routing both the
+ *  automatic post-download flow AND the manual restart IPC through here guarantees
+ *  no code path can ever pop the installer UI during an update. */
+function applyUpdateAndRestart(): void {
+  stopServer(); // free port + kill Chromium before the installer relaunches us
+  autoUpdater.quitAndInstall(true, true);
 }
 
 function setupAutoUpdater(): void {
@@ -162,6 +173,11 @@ function setupAutoUpdater(): void {
     sendUpdateStatus(`Update ${info.version} found — downloading in the background…`);
     sendUpdateState('available', info.version);
   });
+  autoUpdater.on('download-progress', progress => {
+    const percent = Math.max(0, Math.min(100, Math.round(progress?.percent ?? 0)));
+    sendUpdateStatus(`Downloading update… ${percent}%`);
+    sendUpdateState('downloading', undefined, percent);
+  });
   autoUpdater.on('update-not-available', () => {
     sendUpdateStatus(`You are on the latest version (${app.getVersion()}).`);
     sendUpdateState('none', app.getVersion());
@@ -171,24 +187,15 @@ function setupAutoUpdater(): void {
     sendUpdateStatus(`Update check failed: ${briefError(err ?? 'unknown error')}`);
     sendUpdateState('error');
   });
+  // Fully automatic, zero-UI update: no dialog, no NSIS wizard. Show the strip a
+  // brief "Update ready — Restarting…" then quitAndInstall(isSilent=true,
+  // isForceRunAfter=true). isSilent=true passes `/S` to the oneClick NSIS
+  // installer (silent, no window); isForceRunAfter=true relaunches the app after.
   autoUpdater.on('update-downloaded', info => {
-    sendUpdateStatus(`Update ${info.version} downloaded — restart to apply.`);
+    sendUpdateStatus(`Update ${info.version} downloaded — restarting to apply…`);
     sendUpdateState('downloaded', info.version);
-    if (!mainWindow) return;
-    void dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Update ready',
-      message: `CSR Funding Intelligence ${info.version} has been downloaded.`,
-      detail: 'Restart now to apply it, or keep working — the update installs on the next launch.',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    }).then(({ response }) => {
-      if (response === 0) {
-        stopServer(); // free port + kill Chromium before the installer relaunches us
-        autoUpdater.quitAndInstall();
-      }
-    });
+    // Brief pause so the "Restarting…" strip is visible before teardown.
+    setTimeout(() => applyUpdateAndRestart(), 2500);
   });
 
   const check = (): void => {
@@ -207,8 +214,7 @@ function setupAutoUpdater(): void {
 ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('updates:restart', () => {
   if (!app.isPackaged) return 'Restart-to-update only works in the installed app.';
-  stopServer(); // free port + kill Chromium before the installer relaunches us
-  autoUpdater.quitAndInstall();
+  applyUpdateAndRestart();
   return 'Restarting…';
 });
 ipcMain.handle('updates:check', async (): Promise<string> => {
