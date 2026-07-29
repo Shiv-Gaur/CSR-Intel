@@ -1,85 +1,102 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-23)
+# Session Handoff — CSR Funding Intelligence (2026-07-28)
+
+> Rewrite this file at the END of every session. The previous version sat stale
+> from 2026-07-23 for five days, which is how a half-finished feature
+> (src/sync/snapshot.ts) got lost — it did not compile, nothing imported it, and
+> the test suite stayed green around it.
 
 ## 1. Goal
-Full UI redesign: replace the dark top-bar layout with the glass/gradient left-sidebar
-shell from docs/design/redesign-mockup.html across Companies / Welfare Schemes /
-Innovators — with ZERO data or feature loss.
+Finish and ship the manual export/import snapshot sync feature that a previous
+session left half-written and unwired.
 
-## 2. Completed (exact paths) — NOT yet committed
-- src/dashboard/dashboard.html — the whole shell:
-  * `<style>` replaced with the mockup design system (exact gradient stops, glass
-    rgba/blur(18-22px) saturate(160%), 236px sidebar, logo-chip gradient, 3px
-    stat-card accent bars, gradient score bars). Legacy CSS var aliases kept
-    (--primary/--border/--text-muted/… map to new tokens) so untouched inline JS
-    styles still resolve. ONE deliberate deviation: --ink-muted #8990a8→#6d7490
-    (contrast on glass; mockup value failed AA at 11-12px).
-  * Sidebar: DRIIV logo (/assets/logo.png) on dark chip, icon nav
-    (Overview/Companies/Welfare Schemes/Innovators/Search/Settings). Nav items
-    reuse old tab ids (tabCompanies/tabSchemes/tabInnovators) + new tabOverview;
-    navSearch→openGlobalSearch; Settings carries id=profileBtn → Match Profile
-    modal (retitled "Settings — Match Profile", contains Check-for-updates).
-  * Pinned update strip (updT1/updT2/updDot/updRestart): "Up to date · v{v} ·
-    checked on launch" → "Update found (downloading)" → "Update available —
-    Restart"; browser mode shows "Local dashboard · browser mode".
-  * Topbar global-search bar keeps id=globalSearchBtn (old listener works);
-    quick-filter search above table KEPT — the two searches are distinct.
-  * Action row under title: addBtn/addInnBtn/importInnBtn/tmplInnBtn/
-    reenrichAllHdrBtn/csvBtn (same ids, same setTab visibility logic).
-  * Insights block REMOVED; new Overview page = 8 stat cards (ids ov-*),
-    renderOverview() fed by statsData + insightsData; Ready card deep-links to
-    Companies?status=complete. loadInsights kept (20s interval).
-  * Notifications bell REMOVED (markup + all JS: snapshot/computeNotifications/
-    renderNotifications/bellBtn/notifPanel). No server API existed.
-  * Filters: pillRow deleted → ddSingle() radio dropdowns + ddGroup() for the
-    Advanced panel (Score/Match/Source/TRL in one .ddmenu.wide). ddRow
-    multi-selects unchanged. .ddmenu clicks stopPropagation so multiselects stay
-    open. Chips + Clear all unchanged.
-  * Profile Match column now matchBarHtml (purple gradient bar ≥40, grey below);
-    Score bars scoreGrad(): ≥60 green grad, ≥40 indigo grad, <40 grey.
-- electron/main.ts — sendUpdateState() on 'updates:state' channel
-  (none/available/downloaded/error + version) alongside the old text channel;
-  ipcMain.handle('updates:restart') → stopServer()+quitAndInstall.
-  Launch check CONFIRMED: setupAutoUpdater runs from app.whenReady on every
-  launch (10s delay), then 4-hourly (packaged only).
-- electron/preload.cjs — exposes onUpdateState + restartToUpdate.
-- docs/PROJECT_REQUIREMENTS.md — redesign entry added; Notifications/Insights
-  entries annotated as removed 2026-07-23.
+## 2. Completed — COMMITTED as e7d1709 "Manual export/import snapshot sync"
+Working tree is CLEAN. Everything below is in that one commit.
+
+- **src/sync/snapshot.ts** (was untracked and broken; now compiles + is tested)
+  * The bug: it called an undefined `getPool()` 8 times → 7 TS2304 errors.
+    Adding the import does NOT fix it — the `getPool()` facade in
+    `src/db/index.ts` is `async` (returns `Promise<QueryResult>`), so `.rows`
+    does not exist on it, and more importantly better-sqlite3's `transaction()`
+    is SYNCHRONOUS: awaiting inside it would commit before the writes ran.
+  * Fix: use the synchronous `query` from `src/db/sqlite.ts` (imported as
+    `dbQuery`) everywhere. ONE access style, comment at the import explains why.
+    Do not "tidy" this back to getPool().
+  * Postgres-looking `NOW()` / `$1` are FINE — `sqlite.ts` translates both.
+- **src/dashboard/dashboard.ts** — three routes, inserted as 9c/9d/9e just before
+  the `/api/companies/bulk` route:
+  * `GET /api/sync/export` — JSON body + Content-Disposition attachment.
+  * `POST /api/sync/import` — raw body via existing `readRawBody`; `SnapshotError`
+    → 400 with the user-facing message, anything else rethrows to the 500 handler.
+  * `POST /api/sync/import/resolve` — body validated by new `syncResolveSchema`.
+- **electron/main.ts** — `sync:save` / `sync:open` ipcMain handlers using
+  `dialog.showSaveDialog` / `showOpenDialog`; both return null on cancel. Main
+  owns only the picker + disk I/O; the renderer owns the HTTP calls.
+- **electron/preload.cjs** — exposes `saveSnapshot(filename, contents)` and
+  `openSnapshot()`.
+- **src/dashboard/dashboard.html**
+  * Settings — Match Profile modal: new "Data sync" group with
+    `syncExportBtn` / `syncImportBtn` + hidden `syncImportFile` input.
+  * New `syncModal` (summary line, origin hint, per-conflict cards).
+  * JS: `exportSnapshot` / `pickSnapshot` / `importSnapshotText` /
+    `showSyncResult` / `applySyncChoices`. Desktop path uses the native dialogs;
+    browser path falls back to `window.location.href` download + file input.
+  * Per-conflict radios `Keep local` (default) / `Use imported` / `Skip` — ONLY
+    "use imported" is posted to /resolve.
+  * Reuses the existing `esc()` at line ~606 — do not add a second one.
+- **docs/PROJECT_REQUIREMENTS.md** — new completed entry + Last updated 2026-07-28.
 
 ## 3. Verification done
-- npm run build + electron:build clean; npm run test 188/188 green (twice).
-- node --check on the extracted inline script: OK.
-- LIVE Electron (npx electron . --remote-debugging-port=9222, driven via
-  puppeteer.connect CDP — script: scratchpad/drive-electron.cjs): screenshots
-  01-10 in session scratchpad. Confirmed: sidebar+logo+update strip
-  ("Up to date · v1.0.2 · checked on launch"), computed backdrop-filter
-  blur(22px) saturate(1.6) on <aside>, gradient body, all three tabs, Status
-  dropdown open, Advanced dropdown groups, Overview cards, Ctrl+K overlay w/
-  FTS results, Settings modal, bulk bar ("2 selected", all 5 actions), header
-  sort (Score ↑), detail tabs incl. Feasibility. Browser mode (headless
-  puppeteer): blur OK, strip fallback OK, bell/insights absent.
+- `npm run build` clean (exit 0).
+- `npm run test` → **214/214 passing, 16 files** (was 191/15 before).
+- `src/sync/__tests__/snapshot.test.ts` — 23 tests: buildSnapshot shape +
+  company/scheme split + counts, parseSnapshot rejects (non-JSON, non-object,
+  wrong format marker, newer schema_version, incompatible app major, missing
+  list, nameless record), diffing (new / identical / conflicting, data.* per-key
+  diffs, case+whitespace-insensitive name match, innovator fields, mixed
+  snapshot), applyResolutions (selective apply, update-not-insert, innovator
+  columns, malformed entries ignored, empty list).
+- **Mutation-checked**: flipping `if (!local)` → `if (local)` in `importSnapshot`
+  fails 7 of the 23 with stack frames inside snapshot.ts. This is the proof the
+  file is actually exercised now — the earlier "tests pass" was vacuous.
+- **Two-database round-trip** (script: scratchpad/roundtrip.ts, run as two
+  processes because `config.sqlitePath` is fixed per process): DB A seeded with
+  3 shared companies → export snapshot1 → add 3 companies → export snapshot2;
+  DB B seeded with the same 3 shared rows + 1 local-only + 1 locally-edited →
+  import snapshot2. Result: 3 added, 2 up-to-date, 1 conflict (the locally-edited
+  row), local-only untouched, no duplicates, row count +3 exactly, re-import
+  idempotent, and resolving the conflict as "use imported" applied cleanly
+  without creating a duplicate. All 19 assertions passed.
+- Dashboard inline script syntax-checked with `vm.Script`
+  (scratchpad/check-inline.cjs) — parses clean.
 
 ## 4. Decisions
-- Overview page invented as the home for surviving insight numbers (avg match,
-  ready-to-contact, auto-discovered) as stat cards — spec allowed this, forbade
-  a dedicated Insights block.
-- csvBtn on Innovators tab still exports schemes CSV — PRE-EXISTING quirk,
-  deliberately not changed (no-feature-change rule). Flag to user if wanted.
-- Innovators keep Ownership filter (spec's list omitted it; no-loss rule wins).
-- st-ready/st-review stat cards on Schemes/Innovators tabs still show company
-  counts — pre-existing behavior, untouched.
+- Access style inside snapshot.ts is the sync `dbQuery`, NOT `getPool()` — see §2.
+- Renderer does the HTTP, main process does only the file dialog + disk I/O.
+  Keeps main.ts thin and avoids duplicating the server URL there.
+- Conflict default is **Keep local**, matching the module's "never silently
+  overwrite" guardrail. Keep-local and Skip are both client-side no-ops; they
+  differ only in intent, and neither is sent to the server.
+- Snapshot matching key is `name` (UNIQUE on both tables), compared
+  case-insensitively and trimmed.
 
 ## 5. Next steps
-1. User visual review → commit (suggest: "Full UI redesign: glass/gradient
-   sidebar shell (mockup-exact), Overview page, dropdown filters").
-2. Release as v1.0.3 when ready (npm run release) to test the update strip's
-   downloaded→Restart flow against a real GitHub release.
-3. .claude/skills/ui-overhaul/SKILL.md is STALE (describes white/pills design,
-   wrong paths src/dashboard.html) — refresh it.
-4. Optional: purge dead CSS if any straggler classes remain (checked: .pill/
-   .notif/.iconbtn/.insights/.tabs all removed).
+1. **Not yet exercised in the live Electron window** — the native Save/Open
+   dialogs were not driven end-to-end via CDP this session (the previous session
+   used `npx electron . --remote-debugging-port=9222` + puppeteer.connect;
+   scratchpad/drive-electron.cjs). Worth a manual click-through of
+   Settings → Export snapshot / Import snapshot in the installed app.
+2. Not released. Current version is 1.0.4; this feature is unreleased.
+3. `.claude/skills/ui-overhaul/SKILL.md` is STILL STALE (describes the
+   pre-redesign white/pills design, wrong paths `src/dashboard.html`) — carried
+   over unaddressed from 2026-07-23.
+4. Snapshots include innovators and schemes, but the round-trip only stressed
+   companies. Innovator/scheme paths are unit-tested but not round-tripped.
 
-## 6. Blockers / carried over from 2026-07-22
-- IndiaCSR 403 rate-limit verification of BHEL/ITC/Infosys re-enrich spend
-  (backup at scratchpad/enrich_backup.json of THAT session) — not touched today.
-- GH_TOKEN pasted in an earlier chat should be revoked (carried warning).
-- Auto-update round-trip (1.0.1→1.0.2 installed app) still the user's manual test.
+## 6. Blockers / carried over
+- Financial data extraction (revenue, net profit, CSR budget) for manually added
+  companies — still OPEN in PROJECT_REQUIREMENTS.md.
+- IndiaCSR 403 rate-limit verification of BHEL/ITC/Infosys re-enrich spend —
+  untouched since 2026-07-22.
+- GH_TOKEN pasted in an earlier chat should be revoked (carried warning, still
+  not confirmed done).
+- Auto-update round-trip on the installed app remains the user's manual test.
