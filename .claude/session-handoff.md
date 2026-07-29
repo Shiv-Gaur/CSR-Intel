@@ -46,10 +46,8 @@ Working tree is CLEAN. Everything below is in that one commit.
 - **docs/PROJECT_REQUIREMENTS.md** — new completed entry + Last updated 2026-07-28.
 
 ## 3. Verification done
-- `npm run build` clean (exit 0). **Note:** `npm run build` is `tsc` on
-  tsconfig.json, which does NOT include `electron/` — the main-process code is
-  type-checked only by `npm run electron:build` (tsconfig.electron.json). Both
-  were run and both are clean. Always run BOTH after touching electron/.
+- `npm run build` clean (exit 0). It is now `tsc && npm run electron:build`, so
+  the ONE command covers both the server program and `electron/` — see §7.
 - `npm run test` → **214/214 passing, 16 files** (was 191/15 before).
 - `src/sync/__tests__/snapshot.test.ts` — 23 tests: buildSnapshot shape +
   company/scheme split + counts, parseSnapshot rejects (non-JSON, non-object,
@@ -82,20 +80,70 @@ Working tree is CLEAN. Everything below is in that one commit.
 - Snapshot matching key is `name` (UNIQUE on both tables), compared
   case-insensitively and trimmed.
 
-## 5. Next steps
-1. **Not yet exercised in the live Electron window** — the native Save/Open
-   dialogs were not driven end-to-end via CDP this session (the previous session
-   used `npx electron . --remote-debugging-port=9222` + puppeteer.connect;
-   scratchpad/drive-electron.cjs). Worth a manual click-through of
-   Settings → Export snapshot / Import snapshot in the installed app.
-2. Not released. Current version is 1.0.4; this feature is unreleased.
-3. `.claude/skills/ui-overhaul/SKILL.md` is STILL STALE (describes the
+## 5. Live click-test in the running Electron app — DONE 2026-07-29
+Driven over CDP against the real 173-company DB. **puppeteer.connect does NOT
+work here** (`Runtime.callFunctionOn timed out` against Electron 43) — use the
+raw CDP client instead: `scratchpad/cdp.cjs` (Node 22 global `WebSocket`,
+`Runtime.evaluate` + real `Input.dispatchMouseEvent` clicks). Native OS dialogs
+are driven by `scratchpad/dialog.ps1` (EnumWindows for class `#32770`, then
+SendKeys).
+
+- Settings → **Export snapshot**: native Save dialog CONFIRMED
+  (`class=#32770 title='Export snapshot' pid=<electron>`), button showed
+  "Exporting…" while it was up. Produced a real 1.5 MB file: format
+  `csr-intel-snapshot`, schema_version 1, app_version 1.0.4, counts
+  173/16/5 matching the array lengths exactly.
+- Settings → **Import snapshot** of that same file: native Open dialog
+  CONFIRMED, summary modal rendered **"0 new · 194 already up to date ·
+  0 conflicts"** (173+16+5=194) with the exported-at/version origin line and the
+  "Nothing to resolve" state, Apply button correctly hidden.
+- **Conflict rendering** exercised with real data by importing a modified copy
+  (3 companies' status/priority + 1 innovator's TRL; no names changed so nothing
+  could be inserted): **"0 new · 190 already up to date · 4 conflicts"**, 4
+  conflict cards, 12 radios (3 per card), Field/Local/Imported diff tables
+  showing `status complete→enriched` and `priority 4→1`, Apply button shown.
+- **Apply choices** clicked with all radios at the "Keep local" default → nothing
+  posted, toast "No changes applied", modal closed. The three conflicted
+  companies verified still `status=complete priority=4` and total still 173 —
+  the never-silently-overwrite guarantee held live.
+- Deliberately NOT done: clicking "Use imported" against the real DB (that would
+  mutate the user's 173-company production data). That write path is covered by
+  unit tests + the two-DB round-trip in §3.
+- Cleanup: electron killed by PID **tree** (`taskkill /T /F`), no orphans, port
+  3000 free; the two test snapshots written to ~/Documents were deleted.
+
+### Gotchas found while driving it
+- SendKeys drops characters on very long paths — the Open dialog silently stayed
+  up with an invalid filename and the import never fired. Use a SHORT path and
+  send `^a` first to clear the box. `dialog.ps1 waitfill` polls for the dialog
+  and fills it in one process (a separate find-then-fill lets it slip away).
+- `Page.captureScreenshot` times out while a native modal is open — screenshot
+  before raising the dialog or after dismissing it.
+- A modal left open swallows the next click: close `#syncModal` (and reopen
+  Settings) before clicking another button.
+
+## 6. Next steps
+1. Not released. Current version is 1.0.4; this feature is unreleased.
+2. `.claude/skills/ui-overhaul/SKILL.md` is STILL STALE (describes the
    pre-redesign white/pills design, wrong paths `src/dashboard.html`) — carried
    over unaddressed from 2026-07-23.
-4. Snapshots include innovators and schemes, but the round-trip only stressed
-   companies. Innovator/scheme paths are unit-tested but not round-tripped.
+3. Snapshots include innovators and schemes, but the two-DB round-trip only
+   stressed companies. Innovator/scheme paths are unit-tested and were seen in
+   the live conflict list, but not round-tripped across two DBs.
 
-## 6. Blockers / carried over
+## 7. Build now covers electron/ (2026-07-29)
+`npm run build` was plain `tsc`, whose program excluded `electron/` entirely, so
+a broken main process could sit undetected until someone ran `electron:build`.
+Now:
+- `"build": "tsc && npm run electron:build"` — the standard check covers both.
+- `"build:server": "tsc"` added for the server-only compile.
+- `electron:dev` / `electron:dist` / `release` no longer call `electron:build`
+  separately (build already does it) — no double compile.
+Verified by injecting a deliberate type error into `electron/main.ts`:
+`npm run build` failed with `electron/main.ts(251,9): error TS2322` where it
+would previously have passed. Probe reverted.
+
+## 8. Blockers / carried over
 - Financial data extraction (revenue, net profit, CSR budget) for manually added
   companies — still OPEN in PROJECT_REQUIREMENTS.md.
 - IndiaCSR 403 rate-limit verification of BHEL/ITC/Infosys re-enrich spend —

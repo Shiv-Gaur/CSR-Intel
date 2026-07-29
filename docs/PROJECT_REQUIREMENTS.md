@@ -341,4 +341,15 @@
       duplicates, re-import idempotent). NOTE: this is the v1 stopgap — the DB
       access style inside snapshot.ts is the SYNCHRONOUS `query` from sqlite.ts,
       not the async getPool() facade, because better-sqlite3 transactions cannot
-      contain awaits.
+      contain awaits. LIVE-VERIFIED 2026-07-29 in the running Electron app
+      against the real 173-company DB: native Save dialog produced a valid
+      1.5 MB snapshot (173/16/5); re-importing it showed "0 new · 194 already up
+      to date · 0 conflicts"; importing a modified copy showed 4 conflicts with
+      diff tables and Keep local/Use imported/Skip radios; applying with the
+      Keep-local defaults wrote nothing and left all records untouched.
+- [x] `npm run build` type-checks `electron/` too — DONE 2026-07-29. `build` is
+      now `tsc && npm run electron:build` (server-only compile kept as
+      `build:server`); electron:dev/electron:dist/release no longer invoke
+      electron:build separately. Previously tsconfig.json excluded `electron/`
+      entirely, so a broken main process passed `npm run build` silently —
+      confirmed fixed by injecting a type error and watching the build fail.

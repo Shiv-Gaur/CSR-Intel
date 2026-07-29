@@ -6,7 +6,8 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run electron:build",
+    "build:server": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "seed": "tsx scripts/seed-priority-list.ts",
@@ -24,11 +25,11 @@
     "migrate": "tsx scripts/migrate.ts",
     "test": "vitest run",
     "electron:build": "tsc -p tsconfig.electron.json",
-    "electron:dev": "npm run build && npm run electron:build && electron .",
+    "electron:dev": "npm run build && electron .",
     "electron:start": "npm run electron:build && electron .",
-    "electron:dist": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish never && tsx scripts/verify-packaged-native.ts",
+    "electron:dist": "npm run build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish never && tsx scripts/verify-packaged-native.ts",
     "postelectron:dist": "npm rebuild better-sqlite3",
-    "release": "npm run build && npm run electron:build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish always && tsx scripts/verify-packaged-native.ts",
+    "release": "npm run build && tsx scripts/stage-electron-assets.ts && electron-builder --win --publish always && tsx scripts/verify-packaged-native.ts",
     "postrelease": "npm rebuild better-sqlite3"
   },
   "dependencies": {
