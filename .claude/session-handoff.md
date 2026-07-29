@@ -46,7 +46,10 @@ Working tree is CLEAN. Everything below is in that one commit.
 - **docs/PROJECT_REQUIREMENTS.md** — new completed entry + Last updated 2026-07-28.
 
 ## 3. Verification done
-- `npm run build` clean (exit 0).
+- `npm run build` clean (exit 0). **Note:** `npm run build` is `tsc` on
+  tsconfig.json, which does NOT include `electron/` — the main-process code is
+  type-checked only by `npm run electron:build` (tsconfig.electron.json). Both
+  were run and both are clean. Always run BOTH after touching electron/.
 - `npm run test` → **214/214 passing, 16 files** (was 191/15 before).
 - `src/sync/__tests__/snapshot.test.ts` — 23 tests: buildSnapshot shape +
   company/scheme split + counts, parseSnapshot rejects (non-JSON, non-object,
