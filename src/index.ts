@@ -16,32 +16,38 @@ function getArgValue(prefix: string): string | null {
  * Background Postgres task queue worker loop
  */
 async function startPostgresQueueWorkers() {
-  logger.info('Starting background Postgres queue workers...');
-  
+  logger.info('Starting background queue workers (enrichment loop + verify/drift loop)...');
+
   const { runEnrichmentAgent } = await import('./agents/enrichment.agent.js');
   const { runVerificationAgent } = await import('./agents/verification.agent.js');
   const { runDriftAgent } = await import('./agents/drift.agent.js');
 
   const pollInterval = 5000; // poll every 5s
-  let polling = false;
 
-  async function poll() {
-    if (polling) return;
-    polling = true;
-    try {
-      // Drain tasks in order of pipeline stages
-      await runEnrichmentAgent();
-      await runVerificationAgent();
-      await runDriftAgent();
-    } catch (err: any) {
-      logger.error('Error in background queue workers', { error: err.message });
-    } finally {
-      polling = false;
-      setTimeout(poll, pollInterval);
+  // Enrichment runs in its OWN loop, independent of verify/drift. Previously all
+  // three agents shared one loop and each drained to exhaustion in sequence, so a
+  // user-initiated re-enrich could sit 'pending' for MINUTES behind a long
+  // verification/drift backlog (the seed ships ~160 pending verify tasks) — the
+  // "modal stuck on Queued, never updates" bug. Giving enrichment its own loop
+  // means a fresh enrich task is claimed within ~pollInterval regardless of how
+  // much verify/drift work is outstanding. The two loops can overlap; better-
+  // sqlite3 serialises all writes and the agents consume different task types.
+  function spawnLoop(fn: () => Promise<void>, name: string): void {
+    let running = false;
+    async function loop(): Promise<void> {
+      if (!running) {
+        running = true;
+        try { await fn(); }
+        catch (err) { logger.error(`Error in ${name} worker`, { error: err instanceof Error ? err.message : String(err) }); }
+        finally { running = false; }
+      }
+      setTimeout(loop, pollInterval);
     }
+    void loop();
   }
 
-  poll();
+  spawnLoop(runEnrichmentAgent, 'enrichment');
+  spawnLoop(async () => { await runVerificationAgent(); await runDriftAgent(); }, 'verify+drift');
 }
 
 /**
