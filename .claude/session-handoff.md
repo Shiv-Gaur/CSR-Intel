@@ -123,7 +123,11 @@ SendKeys).
   Settings) before clicking another button.
 
 ## 6. Next steps
-1. Not released. Current version is 1.0.4; this feature is unreleased.
+1. Releasing as **1.0.5**, not 1.0.4. A different 1.0.4 build (2026-07-27,
+   pre-snapshot-sync) was already installed on this machine, so publishing 1.0.4
+   would collide: electron-updater treats equal versions as "no update", making
+   the release untestable on this install. Its stale artifacts were moved to
+   `release/_stale-2026-07-27/`.
 2. `.claude/skills/ui-overhaul/SKILL.md` is STILL STALE (describes the
    pre-redesign white/pills design, wrong paths `src/dashboard.html`) — carried
    over unaddressed from 2026-07-23.
