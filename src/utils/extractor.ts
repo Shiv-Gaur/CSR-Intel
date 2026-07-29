@@ -624,6 +624,20 @@ const ENTITY_TOKEN_STOPWORDS = new Set([
   'services', 'technologies', 'systems', 'solutions', 'corporation', 'bank',
 ]);
 
+// Prose that marks a FORMER officeholder. Wikipedia leadership sections narrate
+// resignations and succession ("MD & CEO Sumant Kathpalia resigned in April
+// 2025…"), which must NOT be captured as current leadership. Checked in a
+// same-sentence window around each title match.
+const FORMER_EXEC_RE = /\b(?:resign(?:ed|ation|s)?|stepp?ed[\s-]?down|step down|former(?:ly)?|ex-|erstwhile|retir(?:ed|ing|es|ement)|outgoing|succeeded by|replaced by|preceded by|predecessor|until\s+20\d\d|till\s+20\d\d|from\s+20\d\d\s+to\s+20\d\d)\b/i;
+// A qualified/subordinate/former variant sitting right before the title — a
+// Deputy / Joint / Acting / Vice / Ex- CEO is not THE current chief executive and
+// must not be recorded as one ("Deputy CEO Arun Khurana", "Ex-CEO Kathpalia").
+const SUBORDINATE_PREFIX_RE = /\b(?:deputy|dy|joint|jt|assistant|asst|acting|interim|vice|former|ex)[-.]?\s*$/i;
+// When an org name sits immediately BEFORE a title on an aggregator page ("BMW
+// Group India CEO Hardeep S. Brar"), the person heads THAT org. Skip the check
+// when the phrase merely leads with a connector/role word rather than an org.
+const ORG_BEFORE_LEAD_IGNORE = /^(?:the|and|by|for|its|our|new|group|global|regional|country|national|chief|deputy|joint|acting|interim|vice|senior|executive|managing|non|a|an)\b/i;
+
 /**
  * Extract executive/leadership contacts from free text: names near title words
  * (CEO, Managing Director, Chairman, CSR Head, Head of Foundation, Corporate
@@ -674,8 +688,16 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
   let orgMatchesEntity: ((s: string) => boolean) | null = null;
   if (entityName && AGGREGATOR_SOURCES.has(source)) {
     const words = entityName.split(/\s+/).filter(Boolean);
-    const tokens = words.map(w => w.toLowerCase()).filter(w => w.length >= 4 && !ENTITY_TOKEN_STOPWORDS.has(w));
-    if (words.length >= 2) tokens.push(words.map(w => w[0]).join('').toLowerCase()); // acronym
+    // ≥3 chars: a short distinctive name/acronym ("ITC") must still gate. With a
+    // ≥4 filter, "ITC Limited" produced NO tokens ("ITC" excluded, "Limited"
+    // a stopword) → the whole aggregator gate silently disabled, flooding the
+    // company with other firms' execs from the ?s= search page.
+    const tokens = words.map(w => w.toLowerCase()).filter(w => w.length >= 3 && !ENTITY_TOKEN_STOPWORDS.has(w));
+    // Acronym gate, but only for 3+ letter acronyms. A 2-letter acronym
+    // (IndusInd Bank → "ib") substring-matches almost any page and defeats the
+    // proximity gate, cross-attributing other companies' executives.
+    const acronym = words.map(w => w[0]).join('').toLowerCase();
+    if (words.length >= 2 && acronym.length >= 3) tokens.push(acronym);
     const matchesEntity = (s: string) => { const t = s.toLowerCase(); return tokens.some(tok => t.includes(tok)); };
     if (tokens.length) {
       orgMatchesEntity = matchesEntity;
@@ -717,7 +739,14 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
       // "from/at/of <Org>" attribution must not name a different organisation.
       if (!nearEntity(m.index) || !attributionOk(m.index)) continue;
       const before = text.slice(Math.max(0, m.index - 60), m.index);
-      const after = text.slice(tre.lastIndex, tre.lastIndex + 70);
+      const after = text.slice(tre.lastIndex, tre.lastIndex + 90);
+      // FORMER-officeholder / subordinate-role guard (all sources — Wikipedia
+      // prose is the main offender). "…CEO, Sumant Kathpalia, resigned in April
+      // 2025…" and "Deputy CEO Arun Khurana … stepped down" are succession
+      // history, not current leadership. The look-ahead stays inside the same
+      // sentence so an unrelated later "resigned" can't drop a current exec.
+      const sameSentenceAfter = after.split(/(?<=[.;])\s/)[0];
+      if (FORMER_EXEC_RE.test(before) || FORMER_EXEC_RE.test(sameSentenceAfter) || SUBORDINATE_PREFIX_RE.test(before)) continue;
       // Trailing attribution on aggregator pages: "Vikas Garg, Chairman, Ebix
       // Group" — the org right after the title owns the person. Title words
       // after the comma ("…, Chairman, CEO and MD") are a continuation, not an org.
@@ -725,6 +754,10 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
         const orgAfter = after.match(/^\s*,\s*((?:[A-Z][A-Za-z&.'’-]*|&)(?:\s+(?:[A-Z][A-Za-z&.'’-]*|&)){0,4})/);
         const isTitleWord = orgAfter && /\b(?:CEO|MD|Chairman|Chairperson|Director|Officer|Secretary|President|Head|Founder)\b/i.test(orgAfter[1]);
         if (orgAfter && !isTitleWord && !orgMatchesEntity(orgAfter[1])) continue;
+        // Org name immediately BEFORE the title ("BMW Group India CEO Hardeep S.
+        // Brar") means the person heads THAT org — reject when it isn't ours.
+        const orgBefore = before.match(/((?:[A-Z][A-Za-z&.'’-]+\s+){0,3}[A-Z][A-Za-z&.'’-]+)\s+$/);
+        if (orgBefore && !ORG_BEFORE_LEAD_IGNORE.test(orgBefore[1]) && !orgMatchesEntity(orgBefore[1])) continue;
       }
       const nb = nameOf(before.match(nameBefore));   // "Kushagra Srivastava, CEO"
       if (nb) push({ name: nb, title, email: null, source, confidence: 'medium' });
@@ -737,8 +770,9 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
     }
   }
 
-  // Wikipedia infobox: "Key people N. Chandrasekaran (Chairman) K Krithivasan (CEO & MD)"
-  const kp = text.match(/key people\s*[:\s]([^]{0,240})/i);
+  // Wikipedia infobox: "Key people N. Chandrasekaran (Chairman) K Krithivasan (CEO & MD)".
+  // The separator is optional — rendered infoboxes glue it ("Key peopleRavinder Takkar…").
+  const kp = text.match(/key people\s*:?\s*([^]{0,240})/i);
   if (kp && nearEntity(kp.index ?? 0)) {
     const pairRe = new RegExp(NAME_RE_SRC + String.raw`\s*\(([^)]{2,60})\)`, 'g');
     let m: RegExpExecArray | null;
@@ -777,6 +811,26 @@ export function extractExecutiveContacts(text: string, source = 'text', entityNa
     const generic = GENERIC_MAILBOXES.find(g => g.re.test(local));
     if (generic && !contacts.some(c => c.email === email)) {
       push({ name: null, title: generic.title, email, source, confidence: generic.confidence });
+    }
+  }
+
+  // Wikipedia: the "Key people" infobox is the authoritative CURRENT-leadership
+  // list. When it is present, drop body/navbox leadership captures whose name
+  // isn't in it — Wikipedia articles embed succession prose ("… resigned …") and
+  // PARENT-company director navboxes (the Vodafone Idea page lists Vodafone Group
+  // plc's Colao/Kleisterlee) that otherwise leak former or other-company execs.
+  // The Key-people names themselves are already in `contacts`, so the current
+  // officeholder is never lost; email-bearing entries are always kept.
+  if (source === 'wikipedia') {
+    const keyNames = new Set<string>();
+    const kpm = text.match(/key people\s*:?\s*([^]{0,240})/i);
+    if (kpm) {
+      const pr = new RegExp(NAME_RE_SRC + String.raw`\s*\(([^)]{2,60})\)`, 'g');
+      let mm: RegExpExecArray | null;
+      while ((mm = pr.exec(kpm[1])) !== null) if (isPlausibleName(mm[1])) keyNames.add(mm[1].trim().toLowerCase());
+    }
+    if (keyNames.size) {
+      return contacts.filter(c => !!c.email || (!!c.name && keyNames.has(c.name.toLowerCase())));
     }
   }
 
@@ -844,6 +898,50 @@ function namesConsistent(a: string, b: string): boolean {
   return short.every(w => long.includes(w));
 }
 
+// Deterministic ordering when joining a person's multiple titles.
+const TITLE_JOIN_ORDER = [
+  'Chairman & Managing Director', 'Chairman', 'Managing Director & CEO',
+  'Managing Director', 'CEO', 'Company Secretary', 'Compliance Officer',
+  'Investor Relations', 'CSR Head',
+];
+function combineTitles(titles: string[]): string {
+  let uniq = [...new Set(titles.map(t => t.trim()))];
+  // Drop any title fully contained in a longer one — "Managing Director" ⊂
+  // "Chairman & Managing Director", "CEO" ⊂ "Managing Director & CEO" — so an
+  // exec listed under both a full and a partial title yields ONE clean title,
+  // never "Chairman & Managing Director & Managing Director".
+  uniq = uniq.filter(t => !uniq.some(o => o !== t && o.toLowerCase().includes(t.toLowerCase())));
+  if (uniq.length === 1) return uniq[0];
+  const low = new Set(uniq.map(t => t.toLowerCase()));
+  // The common Indian combined exec role — render it canonically.
+  if (uniq.length === 2 && low.has('ceo') && low.has('managing director')) return 'Managing Director & CEO';
+  const rank = (t: string) => { const i = TITLE_JOIN_ORDER.indexOf(t); return i < 0 ? 99 : i; };
+  return uniq.sort((a, b) => rank(a) - rank(b)).join(' & ');
+}
+
+/** One human = one contact. Multiple title captures of the SAME person (a bank's
+ *  "Managing Director & CEO" parsed once as MD by the body scan and once as CEO
+ *  by the infobox) collapse into a single entry with a combined title. Name-less
+ *  (email-only) contacts pass through untouched. Order of first appearance kept. */
+function collapseByName(contacts: ExecutiveContact[]): ExecutiveContact[] {
+  const norm = (n: string) => n.toLowerCase().replace(/\s+/g, ' ').trim();
+  const seen = new Set<string>();
+  const out: ExecutiveContact[] = [];
+  for (const c of contacts) {
+    if (!c.name) { out.push(c); continue; }
+    const k = norm(c.name);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const group = contacts.filter(x => x.name && norm(x.name) === k);
+    if (group.length === 1) { out.push(group[0]); continue; }
+    // Prefer an email-bearing / most-trusted entry as the base, combine titles.
+    const base = group.slice().sort((a, b) =>
+      (b.email ? 1 : 0) - (a.email ? 1 : 0) || contactSourceTier(a.source) - contactSourceTier(b.source))[0];
+    out.push({ ...base, title: combineTitles(group.map(x => x.title)) });
+  }
+  return out;
+}
+
 /**
  * Pool per-source contact lists with source-trust priority:
  *  - official site → regulatory filings → aggregators (list is ordered that way);
@@ -879,7 +977,7 @@ export function mergeExecutiveContacts(lists: ExecutiveContact[][]): ExecutiveCo
     const prev = byKey.get(key);
     if (!prev || (!prev.email && c.email)) byKey.set(key, c);
   }
-  return [...byKey.values()].slice(0, 10);
+  return collapseByName([...byKey.values()]).slice(0, 10);
 }
 
 // ─── Manual contact overrides ─────────────────────────────────────────────────

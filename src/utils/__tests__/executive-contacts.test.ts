@@ -249,9 +249,13 @@ describe('mergeExecutiveContacts — source-trust priority', () => {
       [c({ name: 'Filed Person', source: 'wikipedia' })],
       [c({ name: 'Filed Person', title: 'Managing Director', source: 'zauba-directors' })],
     ]);
-    const wiki = merged.find(x => x.title === 'CEO');
-    expect(wiki).toBeDefined();
-    expect(wiki!.verification).toBeUndefined();
+    // One person captured with two titles → collapsed into a single contact with
+    // a combined title; the tier-2 regulatory source confirms the name, so it is
+    // NOT labeled unverified.
+    const person = merged.find(x => x.name === 'Filed Person');
+    expect(person).toBeDefined();
+    expect(person!.title).toBe('Managing Director & CEO');
+    expect(person!.verification).toBeUndefined();
   });
 
   it('orders official-site contacts before aggregator contacts', () => {
@@ -336,6 +340,48 @@ describe('LinkedIn contact ban + boilerplate email defenses', () => {
     expect(r.find(c => c.email === 'csr@randomportal.com')).toBeUndefined();
     const ok = extractExecutiveContacts('For queries: csr@bhel.in', 'indiacsr', 'BHEL');
     expect(ok.find(c => c.email === 'csr@bhel.in')).toBeDefined();
+  });
+});
+
+describe('IndusInd Bank regression — no former / deputy / cross-attributed CEOs', () => {
+  // Verbatim-shaped excerpts from the real IndusInd Bank pages that produced FIVE
+  // conflicting "CEO/MD" contacts (Hardeep S. Brar, Sumant Kathpalia, Arun
+  // Khurana, Rajiv Anand ×2). See extractor FORMER_EXEC_RE / SUBORDINATE_PREFIX_RE
+  // / org-before gate / collapseByName.
+  const WIKI = [
+    'IndusInd Bank Type Public Founder S. P. Hinduja Headquarters Mumbai, Maharashtra, India',
+    'Key people Rajiv Anand (Managing Director & CEO)[1] Products Consumer banking Commercial banking.',
+    "Regulators raised questions on the bank's internal controls.[21] IndusInd Bank's Managing Director",
+    'and CEO, Sumant Kathpalia, resigned in April 2025, taking "moral responsibility" for the',
+    'discrepancies. His resignation followed that of Deputy CEO Arun Khurana, who stepped down a day',
+    'earlier.[22] "SEBI Bans IndusInd Bank Ex-CEO Sumant Kathpalia, Four Others From Securities Market".',
+  ].join(' ');
+  const INDIACSR =
+    'IndusInd Bank CSR news and updates. Skills Are the Starting Line, Jobs Are the Finish Line: ' +
+    'BMW Group India CEO Hardeep S. Brar by India CSR July 21, 2026. Hardeep S. Brar discussing BMW ' +
+    'India strategy. More IndusInd Bank Foundation coverage below.';
+
+  it('drops former (resigned/ex-) and deputy execs from the Wikipedia body', () => {
+    const r = extractExecutiveContacts(WIKI, 'wikipedia', 'IndusInd Bank');
+    const names = r.map(c => c.name);
+    expect(names).not.toContain('Sumant Kathpalia'); // resigned + "Ex-CEO"
+    expect(names).not.toContain('Arun Khurana');     // "Deputy CEO", stepped down
+    expect(names).toContain('Rajiv Anand');          // current MD & CEO
+  });
+
+  it('does not cross-attribute another company\'s CEO from an IndiaCSR search page', () => {
+    const r = extractExecutiveContacts(INDIACSR, 'indiacsr', 'IndusInd Bank');
+    expect(r.find(c => c.name === 'Hardeep S. Brar')).toBeUndefined(); // BMW Group India, not IndusInd
+  });
+
+  it('merges to exactly one current, correctly-titled contact', () => {
+    const merged = mergeExecutiveContacts([
+      extractExecutiveContacts(WIKI, 'wikipedia', 'IndusInd Bank'),
+      extractExecutiveContacts(INDIACSR, 'indiacsr', 'IndusInd Bank'),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].name).toBe('Rajiv Anand');
+    expect(merged[0].title).toBe('Managing Director & CEO'); // MD + CEO collapsed, not two entries
   });
 });
 
