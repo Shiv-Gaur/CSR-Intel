@@ -4,7 +4,7 @@
 > completed or a new one is added. Do not drop requirements — if something can't be done
 > this session, it stays open here.
 >
-> Last updated: 2026-07-23
+> Last updated: 2026-07-28
 
 ## Requirements
 
@@ -317,3 +317,28 @@
       mockup: --ink-muted darkened #8990a8→#6d7490 for AA-ish contrast on glass.
       NOTE: .claude/skills/ui-overhaul/SKILL.md still describes the pre-redesign
       white/pills design — stale, needs a refresh.
+- [x] Manual export/import snapshot sync (share data between machines) — DONE
+      2026-07-28. `src/sync/snapshot.ts`: buildSnapshot() dumps entities (split
+      companies vs govt_scheme) + innovators into a versioned JSON envelope
+      (format marker, schema_version 1, app_version, exported_at, counts);
+      parseSnapshot() rejects non-JSON, wrong format, newer schema, mismatched
+      app major, missing lists and nameless records. Import matches on `name`
+      (case/whitespace-insensitive) and NEVER silently overwrites: new records
+      insert, identical ones count as up-to-date, existing-but-different become
+      conflicts the user resolves by hand; only "use imported" choices reach
+      applyResolutions(). Routes: GET /api/sync/export (download), POST
+      /api/sync/import (raw JSON body → counts + conflict details), POST
+      /api/sync/import/resolve (Zod-validated resolutions). UI: Export/Import
+      snapshot buttons in Settings — Match Profile, using Electron native
+      Save/Open dialogs (sync:save / sync:open IPC + preload saveSnapshot/
+      openSnapshot), falling back to a browser download + file input; import
+      summary modal shows new/up-to-date/conflict counts with per-conflict
+      Keep local / Use imported / Skip radios over a Field/Local/Imported diff
+      table. 23 unit tests in src/sync/__tests__/snapshot.test.ts (shape,
+      validation, diffing, resolutions) plus a verified two-database round-trip
+      (export → add 3 companies → re-export → import into a second DB: 3 added,
+      2 up-to-date, 1 conflict, local-only and locally-edited rows untouched, no
+      duplicates, re-import idempotent). NOTE: this is the v1 stopgap — the DB
+      access style inside snapshot.ts is the SYNCHRONOUS `query` from sqlite.ts,
+      not the async getPool() facade, because better-sqlite3 transactions cannot
+      contain awaits.

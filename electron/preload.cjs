@@ -21,4 +21,8 @@ contextBridge.exposeInMainWorld('csrDesktop', {
     ipcRenderer.on('updates:state', (_event, payload) => cb(payload));
   },
   restartToUpdate: () => ipcRenderer.invoke('updates:restart'),
+  // Snapshot sync file dialogs. saveSnapshot → written path or null (cancelled);
+  // openSnapshot → {path, name, contents} or null (cancelled).
+  saveSnapshot: (filename, contents) => ipcRenderer.invoke('sync:save', filename, contents),
+  openSnapshot: () => ipcRenderer.invoke('sync:open'),
 });

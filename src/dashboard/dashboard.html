@@ -351,6 +351,13 @@
         <div class="fgroup"><label class="h">Sectors we target</label><div class="checkgrid" id="sectorGrid"></div></div>
         <div class="fgroup"><label class="h">Target states / UTs</label><div class="checkgrid geo" id="geoGrid"></div></div>
         <div class="fgroup"><label class="h">Keywords</label><div class="taginput" id="kwInput"><input type="text" placeholder="Type and press Enter… e.g. solar, water, girls"></div></div>
+        <div class="fgroup"><label class="h">Data sync</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="syncExportBtn" title="Save every company, scheme and innovator to a snapshot file">⬇ Export snapshot</button>
+            <button id="syncImportBtn" title="Merge a snapshot file from another machine">⬆ Import snapshot</button>
+            <input type="file" id="syncImportFile" accept=".json,application/json" style="display:none">
+          </div>
+          <div class="hint">Share data between machines by hand. Importing only adds new records — anything that already exists locally and differs is shown as a conflict for you to resolve.</div></div>
         <div class="fgroup" id="updateGroup" style="display:none"><label class="h">Desktop app</label>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button id="updateCheckBtn">Check for updates</button>
@@ -418,6 +425,22 @@
         <div class="hint" style="margin-top:10px">Imported innovators are deep-researched in the background — founders, awards and sustainability signals fill in over the next minutes.</div>
       </div>
       <div class="mfoot"><button class="primary" id="importDone">Done</button></div>
+    </div>
+  </div>
+
+  <!-- Snapshot import summary + per-conflict resolution -->
+  <div class="modal-bg" id="syncModal">
+    <div class="modal" style="max-width:720px">
+      <div class="mhead"><h2>⬆ Snapshot Import</h2><button class="close" id="syncClose">×</button></div>
+      <div class="mbody">
+        <p id="syncSummary" style="font-weight:600;margin-bottom:6px"></p>
+        <div class="hint" id="syncOrigin" style="margin-bottom:12px"></div>
+        <div id="syncConflicts"></div>
+      </div>
+      <div class="mfoot">
+        <button id="syncCancel">Close</button>
+        <button class="primary" id="syncApply" style="display:none">Apply choices</button>
+      </div>
     </div>
   </div>
 
@@ -1512,6 +1535,105 @@
     document.getElementById('profileCancel').addEventListener('click',closeProfile);
     document.getElementById('profileSave').addEventListener('click',saveProfile);
     document.getElementById('profileModal').addEventListener('click',function(e){ if(e.target===this)closeProfile(); });
+
+    // ─── Snapshot sync (manual export/import between machines) ───────────────
+    // Desktop uses Electron's native Save/Open dialogs; in a plain browser it
+    // falls back to a normal download and a hidden file input.
+    var syncConflicts=[];
+    function exportSnapshot(){
+      var btn=document.getElementById('syncExportBtn'); btn.disabled=true; btn.textContent='Exporting…';
+      var reset=function(){ btn.disabled=false; btn.textContent='⬇ Export snapshot'; };
+      if(!(window.csrDesktop&&window.csrDesktop.saveSnapshot)){ window.location.href='/api/sync/export'; reset(); return; }
+      fetch('/api/sync/export')
+        .then(function(r){ if(!r.ok)throw new Error('export failed');
+          var cd=r.headers.get('Content-Disposition')||''; var m=cd.match(/filename="([^"]+)"/);
+          return r.text().then(function(t){ return {name:m?m[1]:'snapshot.json',text:t}; }); })
+        .then(function(f){ return window.csrDesktop.saveSnapshot(f.name,f.text); })
+        .then(function(saved){ reset(); showToast(saved?('Snapshot saved to '+saved):'Export cancelled'); })
+        .catch(function(){ reset(); showToast('Export failed'); });
+    }
+    function importSnapshotText(text){
+      var btn=document.getElementById('syncImportBtn'); btn.disabled=true; btn.textContent='Importing…';
+      fetch('/api/sync/import',{method:'POST',headers:{'Content-Type':'application/json'},body:text})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+        .then(function(res){
+          btn.disabled=false; btn.textContent='⬆ Import snapshot';
+          if(!res.ok){ showToast((res.j&&res.j.error)||'Import failed'); return; }
+          showSyncResult(res.j);
+          loadStats(); loadCompanies(); loadSchemes(); loadInnovators();
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent='⬆ Import snapshot'; showToast('Import request failed'); });
+    }
+    function pickSnapshot(){
+      if(window.csrDesktop&&window.csrDesktop.openSnapshot){
+        window.csrDesktop.openSnapshot().then(function(f){ if(f&&f.contents)importSnapshotText(f.contents); })
+          .catch(function(){ showToast('Could not open file'); });
+      } else document.getElementById('syncImportFile').click();
+    }
+    function showSyncResult(r){
+      syncConflicts=r.conflicts||[];
+      var a=r.added||{companies:0,schemes:0,innovators:0};
+      var newTotal=(a.companies||0)+(a.schemes||0)+(a.innovators||0);
+      document.getElementById('syncSummary').textContent=
+        newTotal+' new · '+(r.upToDate||0)+' already up to date · '+syncConflicts.length+' conflict'+(syncConflicts.length===1?'':'s');
+      var snap=r.snapshot||{};
+      document.getElementById('syncOrigin').textContent=
+        'New: '+(a.companies||0)+' companies, '+(a.schemes||0)+' schemes, '+(a.innovators||0)+' innovators.'+
+        (snap.exported_at?('  Snapshot exported '+new Date(snap.exported_at).toLocaleString()+(snap.app_version?(' by v'+snap.app_version):'')+'.'):'');
+      var host=document.getElementById('syncConflicts');
+      if(!syncConflicts.length){
+        host.innerHTML='<div class="hint">Nothing to resolve — no existing record differed from the snapshot.</div>';
+        document.getElementById('syncApply').style.display='none';
+      } else {
+        host.innerHTML=syncConflicts.map(function(c,i){
+          var rows=c.diffs.map(function(d){
+            return '<tr><td style="padding:4px 8px;font-weight:600;white-space:nowrap">'+esc(d.field)+'</td>'+
+                   '<td style="padding:4px 8px">'+esc(d.local)+'</td>'+
+                   '<td style="padding:4px 8px">'+esc(d.imported)+'</td></tr>';
+          }).join('');
+          return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px">'+
+            '<div style="font-weight:600;margin-bottom:6px">'+esc(c.name)+' <span class="hint" style="margin:0">('+esc(c.type)+')</span></div>'+
+            '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+
+            '<thead><tr><th style="text-align:left;padding:4px 8px">Field</th><th style="text-align:left;padding:4px 8px">Local</th><th style="text-align:left;padding:4px 8px">Imported</th></tr></thead>'+
+            '<tbody>'+rows+'</tbody></table></div>'+
+            '<div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">'+
+              '<label><input type="radio" name="cf'+i+'" value="keep" checked> Keep local</label>'+
+              '<label><input type="radio" name="cf'+i+'" value="use"> Use imported</label>'+
+              '<label><input type="radio" name="cf'+i+'" value="skip"> Skip</label>'+
+            '</div></div>';
+        }).join('');
+        document.getElementById('syncApply').style.display='';
+      }
+      document.getElementById('syncModal').classList.add('show');
+    }
+    function applySyncChoices(){
+      // Only "use imported" reaches the server — keep-local and skip are no-ops.
+      var chosen=syncConflicts.filter(function(c,i){
+        var el=document.querySelector('input[name="cf'+i+'"]:checked');
+        return el&&el.value==='use';
+      }).map(function(c){ return {type:c.type,name:c.name,imported:c.imported}; });
+      if(!chosen.length){ document.getElementById('syncModal').classList.remove('show'); showToast('No changes applied'); return; }
+      var btn=document.getElementById('syncApply'); btn.disabled=true; btn.textContent='Applying…';
+      fetch('/api/sync/import/resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resolutions:chosen})})
+        .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+        .then(function(res){
+          btn.disabled=false; btn.textContent='Apply choices';
+          document.getElementById('syncModal').classList.remove('show');
+          if(!res.ok){ showToast((res.j&&res.j.error)||'Could not apply'); return; }
+          showToast('Applied '+(res.j.applied||0)+' imported record'+((res.j.applied===1)?'':'s'));
+          loadStats(); loadCompanies(); loadSchemes(); loadInnovators();
+        })
+        .catch(function(){ btn.disabled=false; btn.textContent='Apply choices'; showToast('Request failed'); });
+    }
+    document.getElementById('syncExportBtn').addEventListener('click',exportSnapshot);
+    document.getElementById('syncImportBtn').addEventListener('click',pickSnapshot);
+    document.getElementById('syncImportFile').addEventListener('change',function(e){
+      var f=e.target.files[0]; e.target.value='';
+      if(f)f.text().then(importSnapshotText).catch(function(){ showToast('Could not read file'); });
+    });
+    document.getElementById('syncApply').addEventListener('click',applySyncChoices);
+    ['syncClose','syncCancel'].forEach(function(id){ document.getElementById(id).addEventListener('click',function(){ document.getElementById('syncModal').classList.remove('show'); }); });
+    document.getElementById('syncModal').addEventListener('click',function(e){ if(e.target===this)document.getElementById('syncModal').classList.remove('show'); });
 
     // ─── Desktop auto-update: sidebar strip + Settings panel button ──────────
     // Main process checks on EVERY launch (10s after ready) and every 4h after;

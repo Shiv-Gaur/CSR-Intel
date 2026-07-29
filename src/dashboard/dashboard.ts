@@ -58,6 +58,19 @@ const matchProfileSchema = z.object({
   keywords: z.array(z.string().trim().min(1)).max(100).default([]),
 });
 
+// Conflict resolutions posted back after a snapshot import. `imported` is the
+// record as it appeared in the snapshot — already validated by parseSnapshot on
+// the way in, re-checked here for a usable name because it round-trips the client.
+const syncResolveSchema = z.object({
+  resolutions: z.array(z.object({
+    type: z.enum(['company', 'scheme', 'innovator']),
+    name: z.string().trim().min(1),
+    imported: z.record(z.unknown()).refine(
+      r => typeof r.name === 'string' && r.name.trim().length > 0,
+      { message: 'imported record must carry a name' }),
+  })).max(10_000),
+});
+
 const createCompanySchema = z.object({
   name: z.string().trim().min(2).max(200),
   category: z.enum(['company', 'foundation', 'psu', 'bank', 'international_funder', 'govt_scheme', 'ngo']).default('company'),
@@ -1099,6 +1112,68 @@ export function startDashboardServer(port = 3000) {
           'Content-Disposition': 'attachment; filename="welfare-schemes.csv"',
         });
         res.end(csv);
+        return;
+      }
+
+      // 9c. GET /api/sync/export — whole-DB snapshot as a downloadable JSON file.
+      // Manual sharing stopgap until server-based sync (Phase 5).
+      if (pathname === '/api/sync/export' && method === 'GET') {
+        const { buildSnapshot, suggestedFilename } = await import('../sync/snapshot.js');
+        const snap = buildSnapshot();
+        const body = JSON.stringify(snap, null, 2);
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${suggestedFilename()}"`,
+          'Content-Length': Buffer.byteLength(body),
+        });
+        res.end(body);
+        return;
+      }
+
+      // 9d. POST /api/sync/import — body = raw snapshot JSON bytes. Inserts new
+      // records, skips identical ones, and returns conflicts for the user to
+      // resolve by hand. Existing local data is NEVER overwritten here.
+      if (pathname === '/api/sync/import' && method === 'POST') {
+        const { parseSnapshot, importSnapshot, SnapshotError } = await import('../sync/snapshot.js');
+        let raw: Buffer;
+        try { raw = await readRawBody(req); } catch (err: any) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+        if (!raw.length) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Empty file' }));
+          return;
+        }
+        try {
+          const snap = parseSnapshot(raw.toString('utf8'));
+          const result = importSnapshot(snap);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          // SnapshotError messages are user-facing; anything else is a real fault.
+          if (err instanceof SnapshotError) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+          } else { throw err; }
+        }
+        return;
+      }
+
+      // 9e. POST /api/sync/import/resolve — apply only the conflicts the user
+      // chose "use imported" for. Keep-local / skip choices never get sent.
+      if (pathname === '/api/sync/import/resolve' && method === 'POST') {
+        const { applyResolutions } = await import('../sync/snapshot.js');
+        const parsed = syncResolveSchema.safeParse(await readJsonBody(req));
+        if (!parsed.success) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid resolutions payload' }));
+          return;
+        }
+        const result = applyResolutions(parsed.data.resolutions);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
         return;
       }
 

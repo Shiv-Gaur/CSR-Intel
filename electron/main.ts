@@ -18,7 +18,7 @@
  * (e.g. `npm run dev` during development), the window just attaches to it and
  * does NOT own its lifecycle (no kill on quit).
  */
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import electronUpdater from 'electron-updater';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
@@ -229,6 +229,35 @@ ipcMain.handle('updates:check', async (): Promise<string> => {
   } catch (err) {
     return `Update check failed: ${briefError(err)}`;
   }
+});
+
+// Native Save/Open dialogs for snapshot sync. The renderer owns the HTTP calls
+// (it knows the server URL); main only owns the file picker + disk I/O, which
+// the sandboxed renderer cannot do. Both return null when the user cancels.
+ipcMain.handle('sync:save', async (_event, filename: string, contents: string) => {
+  const win = mainWindow;
+  const opts = {
+    title: 'Export snapshot',
+    defaultPath: path.join(app.getPath('documents'), String(filename || 'snapshot.json')),
+    filters: [{ name: 'Snapshot (JSON)', extensions: ['json'] }],
+  };
+  const result = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  if (result.canceled || !result.filePath) return null;
+  await fs.promises.writeFile(result.filePath, String(contents), 'utf8');
+  return result.filePath;
+});
+
+ipcMain.handle('sync:open', async () => {
+  const win = mainWindow;
+  const opts = {
+    title: 'Import snapshot',
+    properties: ['openFile' as const],
+    filters: [{ name: 'Snapshot (JSON)', extensions: ['json'] }],
+  };
+  const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  if (result.canceled || !result.filePaths.length) return null;
+  const filePath = result.filePaths[0];
+  return { path: filePath, name: path.basename(filePath), contents: await fs.promises.readFile(filePath, 'utf8') };
 });
 
 function createWindow(): void {
