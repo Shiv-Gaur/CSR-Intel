@@ -4,7 +4,7 @@
 > completed or a new one is added. Do not drop requirements — if something can't be done
 > this session, it stays open here.
 >
-> Last updated: 2026-07-28
+> Last updated: 2026-07-30
 
 ## Requirements
 
@@ -347,6 +347,20 @@
       to date · 0 conflicts"; importing a modified copy showed 4 conflicts with
       diff tables and Keep local/Use imported/Skip radios; applying with the
       Keep-local defaults wrote nothing and left all records untouched.
+- [x] Ship snapshot sync to users — RELEASED as **v1.0.5** 2026-07-29:
+      https://github.com/Shiv-Gaur/CSR-Intel/releases/tag/v1.0.5 (id 361724396,
+      non-draft, tag at commit c20397e). Numbered 1.0.5 not 1.0.4 because an
+      earlier unpublished 1.0.4 build (2026-07-27, pre-snapshot-sync) was already
+      installed locally and electron-updater treats equal versions as "no
+      update"; the unreleased v1.0.4 tag was deleted and its stale artifacts
+      moved to `release/_stale-2026-07-27/`. All three assets on ONE release
+      (installer 204,150,193 B + .blockmap + latest.yml), with latest.yml
+      verified by downloading the published installer and recomputing its sha512
+      (declared == measured) rather than trusting file presence. electron-builder
+      again split the publish into TWO non-draft releases with assets divided
+      between them — repaired by deleting both and recreating one via the API;
+      this is now reproducible (v1.0.3 and v1.0.5), so treat the publish step as
+      unreliable and always verify.
 - [x] `npm run build` type-checks `electron/` too — DONE 2026-07-29. `build` is
       now `tsc && npm run electron:build` (server-only compile kept as
       `build:server`); electron:dev/electron:dist/release no longer invoke

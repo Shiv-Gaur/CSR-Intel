@@ -1,4 +1,4 @@
-# Session Handoff — CSR Funding Intelligence (2026-07-28)
+# Session Handoff — CSR Funding Intelligence (2026-07-28 → 2026-07-30)
 
 > Rewrite this file at the END of every session. The previous version sat stale
 > from 2026-07-23 for five days, which is how a half-finished feature
@@ -122,12 +122,37 @@ SendKeys).
 - A modal left open swallows the next click: close `#syncModal` (and reopen
   Settings) before clicking another button.
 
-## 6. Next steps
-1. Releasing as **1.0.5**, not 1.0.4. A different 1.0.4 build (2026-07-27,
-   pre-snapshot-sync) was already installed on this machine, so publishing 1.0.4
-   would collide: electron-updater treats equal versions as "no update", making
-   the release untestable on this install. Its stale artifacts were moved to
-   `release/_stale-2026-07-27/`.
+## 6. RELEASED as v1.0.5 — 2026-07-29
+**https://github.com/Shiv-Gaur/CSR-Intel/releases/tag/v1.0.5** (id 361724396,
+draft=false, published_at 2026-07-29T12:04:46Z, tag at commit c20397e).
+
+Shipped as 1.0.5 rather than 1.0.4: a different 1.0.4 build (2026-07-27,
+pre-snapshot-sync) was already installed on this machine, and electron-updater
+treats equal versions as "no update", which would have made the release
+undetectable on this install. The unreleased v1.0.4 tag was deleted (local +
+remote) and the stale 1.0.4 artifacts moved to `release/_stale-2026-07-27/`.
+
+- Assets (all three on the ONE release): `CSR-Funding-Intelligence-Setup-1.0.5.exe`
+  (204,150,193 B), `.exe.blockmap` (210,784 B), `latest.yml` (377 B).
+- latest.yml verified by DOWNLOADING the published installer and hashing it —
+  version 1.0.5, declared size and sha512 both equal the measured values, and
+  `files[0].sha512` agrees with the top-level `sha512`. Not a presence check.
+- `postrelease` (`npm rebuild better-sqlite3`) ran, so the native module is back
+  on the Node ABI; `npm run test` 214/214 confirms it.
+- **The split-release trap reproduced.** electron-builder logged "creating GitHub
+  release" TWICE and produced two non-draft releases for v1.0.5 with the assets
+  split (one got exe+latest.yml, the other only the blockmap). Repaired exactly
+  as [[release-publish-traps]] prescribes: DELETE both by id (204), confirm the
+  tag survived (200), POST one release, upload all three assets (201 each).
+  This is now reproducible across v1.0.3 and v1.0.5 — assume it will happen
+  again and plan to repair, don't hope the publish step works.
+
+## 7. Next steps
+1. Auto-update round-trip is now testable for the first time: this machine has
+   1.0.4 installed and 1.0.5 is live, so launching the installed app should
+   detect and silently install the update. Still the user's manual test.
+   Per [[silent-update-and-install]] the 1.0.4→1.0.5 transition may still show a
+   brief progress window; fully silent applies from 1.0.5 onward.
 2. `.claude/skills/ui-overhaul/SKILL.md` is STILL STALE (describes the
    pre-redesign white/pills design, wrong paths `src/dashboard.html`) — carried
    over unaddressed from 2026-07-23.
@@ -135,7 +160,7 @@ SendKeys).
    stressed companies. Innovator/scheme paths are unit-tested and were seen in
    the live conflict list, but not round-tripped across two DBs.
 
-## 7. Build now covers electron/ (2026-07-29)
+## 8. Build now covers electron/ (2026-07-29)
 `npm run build` was plain `tsc`, whose program excluded `electron/` entirely, so
 a broken main process could sit undetected until someone ran `electron:build`.
 Now:
@@ -147,7 +172,12 @@ Verified by injecting a deliberate type error into `electron/main.ts`:
 `npm run build` failed with `electron/main.ts(251,9): error TS2322` where it
 would previously have passed. Probe reverted.
 
-## 8. Blockers / carried over
+## 9. Blockers / carried over
+- **Revoke the GH_TOKEN pasted into chat on 2026-07-29**
+  (`ghp_TeQV...`, scope `repo`, push+admin). It is in that conversation's
+  transcript permanently; the local scratchpad copy was deleted, which does not
+  help. https://github.com/settings/tokens — the token from an earlier chat is
+  still outstanding too.
 - Financial data extraction (revenue, net profit, CSR budget) for manually added
   companies — still OPEN in PROJECT_REQUIREMENTS.md.
 - IndiaCSR 403 rate-limit verification of BHEL/ITC/Infosys re-enrich spend —
